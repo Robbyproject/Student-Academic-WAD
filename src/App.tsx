@@ -1,12 +1,3 @@
-<<<<<<< HEAD
-import Dashboard from "./pages/dashboard";
-import "./App.css";
-
-function App() {
-    return (
-        <Dashboard />
-    );
-=======
 import { useState } from 'react';
 import type { UserProfile } from './types/user';
 import { Navbar } from './components/Navbar';
@@ -41,7 +32,6 @@ export function App() {
       </main>
     </div>
   );
->>>>>>> origin/arya-branch
 }
 
 export default App;
