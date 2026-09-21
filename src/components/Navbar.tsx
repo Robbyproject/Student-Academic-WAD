@@ -11,31 +11,33 @@ export const Navbar: React.FC<NavbarProps> = ({ user, activePage, onNavigate }) 
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
 
   return (
-    <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-      <div 
-        className="flex items-center space-x-3 cursor-pointer select-none"
+    <nav className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur sm:px-6">
+      <div
+        className="flex shrink-0 items-center space-x-3 cursor-pointer select-none"
         onClick={() => onNavigate('dashboard')}
       >
-        <div className="w-9 h-9 bg-indigo-600 rounded flex items-center justify-center text-white font-bold text-sm">
-          Logo
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-sm font-bold text-white shadow-md shadow-indigo-500/20">
+          R
         </div>
-        <span className="text-xl font-bold text-gray-800">Akademik</span>
+        <div className="hidden sm:block">
+          <span className="bg-gradient-to-r from-indigo-600 to-cyan-600 bg-clip-text text-lg font-bold text-transparent">Student Academic</span>
+          <span className="-mt-1 block text-[9px] font-semibold uppercase tracking-wider text-slate-400">Academic Portal</span>
+        </div>
       </div>
 
-      <div className="flex bg-slate-100 p-1 rounded-full">
-        <button 
-          onClick={() => onNavigate('dashboard')}
-          className={`px-5 py-1.5 rounded-full font-medium text-sm transition-all cursor-pointer select-none ${
-            activePage === 'dashboard'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          Dashboard
-        </button>
+      <div className="hidden min-w-0 flex-1 items-center justify-center gap-3 md:flex">
+        <label className="relative w-full max-w-md">
+          <span className="sr-only">Cari akademik</span>
+          <svg aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" strokeWidth="1.5" /><path d="m20 20-4-4" strokeLinecap="round" strokeWidth="1.5" /></svg>
+          <input className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs text-slate-700 outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100" placeholder="Cari mata kuliah, materi, atau tugas..." />
+        </label>
+        <select aria-label="Semester aktif" className="h-9 shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-medium text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
+          <option>2026/2027 Ganjil</option>
+          <option>2025/2026 Genap</option>
+        </select>
       </div>
 
-      <div className="flex items-center space-x-4 relative">
+      <div className="relative flex shrink-0 items-center space-x-3">
 
         <button className="text-slate-500 hover:text-slate-700 cursor-pointer">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

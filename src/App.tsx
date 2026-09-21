@@ -1,7 +1,67 @@
-import { useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import Lenis from 'lenis';
 import type { UserProfile } from './types/user';
 import { Navbar } from './components/Navbar';
-import { DataDiri } from './pages/DataDiri';
+import Sidebar from './components/Sidebar';
+import matkulData from './lib/data/matkul.json';
+import type { Course } from './sections/Kelas/Page';
+
+const DataDiri = lazy(() => import('./pages/DataDiri').then((module) => ({ default: module.DataDiri })));
+const Dashboard = lazy(() => import('./pages/dashboard'));
+const Kelas = lazy(() => import('./sections/Kelas/Page'));
+const KelasDetail = lazy(() => import('./sections/Kelas/KelasDetail/Page'));
+
+export type ActivePage = 'dashboard' | 'profile';
+
+function getStoredPage(): ActivePage {
+  return sessionStorage.getItem('academic-active-page') === 'profile' ? 'profile' : 'dashboard';
+}
+
+function getStoredCourse(): Course | null {
+  const storedCourseId = Number(sessionStorage.getItem('academic-selected-course'));
+  return matkulData.find((course) => course.id === storedCourseId) ?? null;
+}
+
+function PageSkeleton() {
+  return (
+    <div aria-label="Memuat halaman" className="mx-auto grid w-full max-w-[1440px] animate-pulse grid-cols-1 items-start gap-5 bg-slate-50 px-3 py-5 sm:px-5 lg:grid-cols-[clamp(190px,20vw,260px)_minmax(0,1fr)] lg:px-6">
+      <div className="space-y-5">
+        <div className="h-28 rounded-2xl bg-slate-200" />
+        <div className="h-72 rounded-2xl bg-slate-200" />
+      </div>
+      <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="h-5 w-40 rounded bg-slate-200" />
+        <div className="h-7 w-full rounded bg-slate-100" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          {Array.from({ length: 6 }, (_, index) => <div className="h-36 rounded-lg bg-slate-200" key={index} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailSkeleton() {
+  return (
+    <div aria-label="Memuat detail kelas" className="mx-auto w-full max-w-[1440px] animate-pulse bg-slate-50 px-3 py-5 sm:px-5 lg:px-6">
+      <div className="mb-4 h-9 w-32 rounded-lg bg-slate-200" />
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="h-28 bg-slate-300 sm:h-36" />
+        <div className="grid gap-5 p-5 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => <div className="space-y-2" key={index}><div className="h-3 w-20 rounded bg-slate-200" /><div className="h-4 w-32 rounded bg-slate-200" /></div>)}
+        </div>
+      </div>
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-5">
+        <div className="h-5 w-20 rounded bg-slate-200" />
+        <div className="mt-5 grid gap-5 md:grid-cols-[130px_minmax(0,1fr)]">
+          <div className="mx-auto h-28 w-28 rounded-full border-[18px] border-slate-200" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div className="h-20 rounded-lg bg-slate-200" key={index} />)}</div>
+        </div>
+      </div>
+      <div className="mt-4 h-11 rounded-xl border border-slate-200 bg-white" />
+      <div className="mt-4 space-y-3">{Array.from({ length: 3 }, (_, index) => <div className="h-16 rounded-xl border border-slate-200 bg-white" key={index} />)}</div>
+    </div>
+  );
+}
 
 export function App() {
   const [user] = useState<UserProfile>({
@@ -13,22 +73,85 @@ export function App() {
     jenisKelamin: 'Laki-laki',
   });
 
-  const [activePage, setActivePage] = useState<'dashboard' | 'profile'>('dashboard');
+  const [activePage, setActivePage] = useState<ActivePage>(getStoredPage);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(getStoredCourse);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  const contentInnerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const wrapper = contentScrollRef.current;
+    const content = contentInnerRef.current;
+
+    if (!wrapper || !content) {
+      return undefined;
+    }
+
+    const lenis = new Lenis({
+      wrapper,
+      content,
+      autoRaf: false,
+      smoothWheel: true,
+    });
+    let animationFrame = 0;
+
+    const animate = (time: number) => {
+      lenis.raf(time);
+      animationFrame = requestAnimationFrame(animate);
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      lenis.destroy();
+    };
+  }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem('academic-active-page', activePage);
+  }, [activePage]);
+
+  useEffect(() => {
+    if (selectedCourse) {
+      sessionStorage.setItem('academic-selected-course', String(selectedCourse.id));
+    } else {
+      sessionStorage.removeItem('academic-selected-course');
+    }
+  }, [selectedCourse]);
+
+  function handleNavigate(page: ActivePage) {
+    setActivePage(page);
+    if (page === 'dashboard') {
+      setSelectedCourse(null);
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans">
+    <div className="flex min-h-screen flex-col bg-gray-50 font-sans text-gray-800 lg:h-screen lg:overflow-hidden">
       <Navbar 
         user={user} 
         activePage={activePage}
-        onNavigate={(page) => setActivePage(page)} 
+        onNavigate={handleNavigate} 
       />
 
-      <main className="py-6">
-        {activePage === 'profile' ? (
-          <DataDiri initialData={user} />
-        ) : (
-          <div></div>
-        )}
+      <main className="grid min-h-0 w-full flex-1 grid-cols-1 items-stretch gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-6 lg:overflow-hidden">
+        <Sidebar activePage={activePage} onNavigate={handleNavigate} />
+        <div className="scrollbar-hidden min-h-0 min-w-0 px-3 py-5 sm:px-0 lg:overflow-y-auto lg:px-5 lg:py-6" ref={contentScrollRef}>
+          <div ref={contentInnerRef}>
+            <Suspense fallback={selectedCourse ? <DetailSkeleton /> : <PageSkeleton />}>
+              {activePage === 'profile' ? (
+                <DataDiri initialData={user} />
+              ) : selectedCourse ? (
+                <KelasDetail course={selectedCourse} onBack={() => setSelectedCourse(null)} />
+              ) : (
+                <div className="grid min-w-0 gap-5">
+                  <Dashboard user={user} />
+                  <Kelas onCourseSelect={setSelectedCourse} />
+                </div>
+              )}
+            </Suspense>
+          </div>
+        </div>
       </main>
     </div>
   );

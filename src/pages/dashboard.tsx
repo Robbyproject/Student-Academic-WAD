@@ -1,16 +1,20 @@
-import Kalender from "../components/kalender";
-import Tasktugas from "../components/tasktugas";
+import Kalender from "../components/Kalendar/kalender";
+import Tasktugas from "../components/Tugas/tasktugas";
+import DashboardHero from "../components/DashboardHero";
+import { taskData } from "../data/academicdata";
+import type { UserProfile } from "../types/user";
 
-function dashboard() {
+function dashboard({ user }: { user: UserProfile }) {
+    const pendingTasks = taskData.filter((task) => !task.completed).length;
+
     return (
-        <main className="min-h-screen bg-slate-50 p-5">
-            <div className="flex flex-col gap-5 md:flex-row">
-                <Tasktugas /> 
+        <div className="grid min-w-0 gap-5">
+            <DashboardHero user={user} pendingTasks={pendingTasks} />
+            <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(260px,0.85fr)_minmax(0,1.35fr)]">
+                <Tasktugas />
                 <Kalender />
-                
             </div>
-            
-        </main>
+        </div>
     );
 }
 

@@ -1,4 +1,4 @@
-import { taskData } from "../data/academicdata";
+import { taskData } from "../../data/academicdata";
 
 /* ---------- Helper ---------- */
 // Parse "YYYY-MM-DD" sebagai tanggal lokal (menghindari bug zona waktu dari new Date("YYYY-MM-DD"))
@@ -56,10 +56,10 @@ function TaskTugas() {
     });
 
     return (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             {/* Header */}
             <div className="flex items-center gap-2 px-5 pt-5 pb-4">
-                <h2 className="text-base font-semibold text-slate-800">
+                <h2 className="min-w-0 break-words text-base font-semibold text-slate-800">
                     Tugas Belum Dikumpulkan
                 </h2>
                 <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-semibold text-white">
@@ -87,15 +87,15 @@ function TaskTugas() {
                                     key={task.id}
                                     className="rounded-xl border-l-4 border-orange-400 bg-orange-50 px-4 py-4"
                                 >
-                                    <h3 className="text-sm font-semibold leading-5 text-slate-800">
+                                    <h3 className="break-words text-sm font-semibold leading-5 text-slate-800">
                                         {task.title}
                                     </h3>
-                                    <p className="mt-1 text-xs text-slate-500">
+                                    <p className="mt-1 break-words text-xs text-slate-500">
                                         {task.course}
                                     </p>
                                     <div className="mt-3 flex items-center gap-2 text-xs text-orange-600">
                                         <ClockIcon />
-                                        <span>Deadline {formattedDeadline}</span>
+                                        <span className="break-words">Deadline {formattedDeadline}</span>
                                     </div>
                                 </article>
                             );

@@ -1,0 +1,101 @@
+[
+	{
+		"id": 1,
+		"code": "CDC24",
+		"name": "Career Design & Professional Development 1",
+		"lecturer": "Siti Rahmawati",
+		"schedules": [
+			"Rabu, 08:30 - 10:00 WIB | Kemang - Sumatera"
+		],
+		"attendancePresent": 6,
+		"attendanceTotal": 8,
+		"semester": "2026/2027 Ganjil"
+	},
+	{
+		"id": 2,
+		"code": "DBas1",
+		"name": "Advanced Database Systems",
+		"lecturer": "Madya Prayogie",
+		"schedules": [
+			"Selasa, 08:30 - 11:00 WIB | Kemang - Sumbawa",
+			"Jumat, 08:30 - 11:00 WIB | Kemang - Sumatera"
+		],
+		"attendancePresent": 3,
+		"attendanceTotal": 16,
+		"semester": "2026/2027 Ganjil"
+	},
+	{
+		"id": 3,
+		"code": "DtSA1",
+		"name": "Data Structures and Algorithms",
+		"lecturer": "Budi Santoso",
+		"schedules": [
+			"Rabu, 13:00 - 15:30 WIB | Kemang - Computer Lab."
+		],
+		"attendancePresent": 7,
+		"attendanceTotal": 8,
+		"semester": "2026/2027 Ganjil"
+	},
+	{
+		"id": 4,
+		"code": "Num01",
+		"name": "Numerical Methods",
+		"lecturer": "Andi Wijaya",
+		"schedules": [
+			"Kamis, 08:30 - 10:00 WIB | Kemang - Jawa"
+		],
+		"attendancePresent": 5,
+		"attendanceTotal": 8,
+		"semester": "2026/2027 Ganjil"
+	},
+	{
+		"id": 5,
+		"code": "Rbt01",
+		"name": "Robotics",
+		"lecturer": "Fajar Nugroho",
+		"schedules": [
+			"Jumat, 08:30 - 10:00 WIB | Kemang - Laboratory 2"
+		],
+		"attendancePresent": 4,
+		"attendanceTotal": 8,
+		"semester": "2026/2027 Ganjil"
+	},
+	{
+		"id": 6,
+		"code": "SDF04",
+		"name": "Software Development Fundamentals",
+		"lecturer": "Madya Prayogie",
+		"schedules": [
+			"Kamis, 11:00 - 12:30 WIB | Kemang - Bali",
+			"Kamis, 12:30 - 14:00 WIB | Kemang - Bali"
+		],
+		"attendancePresent": 0,
+		"attendanceTotal": 0,
+		"semester": "2026/2027 Ganjil"
+	},
+	{
+		"id": 7,
+		"code": "WAD04",
+		"name": "Web Application Development",
+		"lecturer": "Rizky Pratama",
+		"schedules": [
+			"Jumat, 13:00 - 15:30 WIB | Kemang - Bali"
+		],
+		"attendancePresent": 5,
+		"attendanceTotal": 16,
+		"semester": "2026/2027 Ganjil"
+	},
+	{
+		"id": 8,
+		"code": "SDLC4",
+		"name": "Software Development Life Cycle",
+		"lecturer": "Dewi Lestari",
+		"schedules": [
+			"Senin, 08:30 - 10:00 WIB | Kemang - Computer Lab.",
+			"Senin, 10:00 - 11:30 WIB | Kemang - Computer Lab."
+		],
+		"attendancePresent": 8,
+		"attendanceTotal": 16,
+		"semester": "2026/2027 Ganjil"
+	}
+]

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { scheduleData } from "../data/academicdata";
+import { scheduleData } from "../../data/academicdata";
 
 /* ---------- Konfigurasi minggu (data dummy) ---------- */
 const TODAY_DATE = 21;
@@ -80,7 +80,7 @@ function CalendarSchedule() {
             : `${selectedDay?.fullDay ?? ""}, ${selectedDate} ${MONTH_LABEL}`;
 
     return (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             {/* Header */}
             <div className="px-5 pt-5">
                 <h2 className="text-base font-semibold text-slate-800">
@@ -160,22 +160,22 @@ function CalendarSchedule() {
                                     : "border-cyan-600 bg-cyan-50/60"
                             }`}
                         >
-                            <h3 className="text-sm font-semibold leading-5 text-slate-800">
+                            <h3 className="break-words text-sm font-semibold leading-5 text-slate-800">
                                 {schedule.course} ({schedule.code})
                             </h3>
 
                             <ul className="mt-3 space-y-2 text-xs text-slate-500">
                                 <li className="flex items-center gap-2">
                                     <BookIcon className="shrink-0" />
-                                    <span>{schedule.session}</span>
+                                    <span className="min-w-0 break-words">{schedule.session}</span>
                                 </li>
                                 <li className="flex items-center gap-2">
                                     <ClockIcon className="shrink-0" />
-                                    <span>{schedule.time}</span>
+                                    <span className="min-w-0 break-words">{schedule.time}</span>
                                 </li>
                                 <li className="flex items-center gap-2">
                                     <PinIcon className="shrink-0" />
-                                    <span>{schedule.room}</span>
+                                    <span className="min-w-0 break-words">{schedule.room}</span>
                                 </li>
                             </ul>
                         </article>
