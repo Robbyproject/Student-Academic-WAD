@@ -5,6 +5,12 @@ import { Navbar } from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import type { Course } from './sections/Kelas/Page';
 
+const Login = lazy(() =>
+  import('./pages/login').then((module) => ({
+    default: module.Login,
+  }))
+);
+
 const DataDiri = lazy(() =>
   import('./pages/DataDiri').then((module) => ({
     default: module.DataDiri,
@@ -106,20 +112,43 @@ function DetailSkeleton() {
 }
 
 export function App() {
-  const [user] = useState<UserProfile>({
-    nama: 'ARYA RIZA PRATAMA',
-    nim: '25110300031',
-    prodi: 'Ilmu Komputer',
-    email: 'aryarizapratama25@gmail.com',
-    noTelepon: '85892927717',
-    jenisKelamin: 'Laki-laki',
+  // Check apakah user sudah memiliki token
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return Boolean(localStorage.getItem('token'));
+  });
+
+  const [user, setUser] = useState<UserProfile>(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        return {
+          nama: parsed.name || parsed.nama || '',
+          nim: parsed.nim || '',
+          prodi: parsed.prodi || '',
+          email: parsed.email || '',
+          noTelepon: parsed.no_telepon || parsed.noTelepon || '',
+          jenisKelamin: parsed.jenis_kelamin || parsed.jenisKelamin || '',
+        };
+      } catch (e) {
+        console.error('Failed to parse user data', e);
+      }
+    }
+
+    // Fallback default nilai kosong (tanpa data pribadi)
+    return {
+      nama: '',
+      nim: '',
+      prodi: '',
+      email: '',
+      noTelepon: '',
+      jenisKelamin: '',
+    };
   });
 
   const [activePage, setActivePage] =
     useState<ActivePage>(getStoredPage);
 
-  // Data kelas berasal dari API Laravel,
-  // tidak mengambil lagi dari matkul.json.
   const [selectedCourse, setSelectedCourse] =
     useState<Course | null>(null);
 
@@ -127,6 +156,8 @@ export function App() {
   const contentInnerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const wrapper = contentScrollRef.current;
     const content = contentInnerRef.current;
 
@@ -154,7 +185,7 @@ export function App() {
       cancelAnimationFrame(animationFrame);
       lenis.destroy();
     };
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     sessionStorage.setItem(
@@ -182,6 +213,14 @@ export function App() {
     if (page === 'dashboard') {
       setSelectedCourse(null);
     }
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Suspense fallback={<div className="flex h-screen items-center justify-center">Memuat...</div>}>
+        <Login />
+      </Suspense>
+    );
   }
 
   return (
