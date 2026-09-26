@@ -7,6 +7,7 @@ export interface AcademicClassDetail {
     sks: number;
     nama_dosen: string;
     jumlah_mahasiswa: number;
+    schedules: string[];
 }
 
 export async function getAcademicClassDetail(
@@ -17,7 +18,7 @@ export async function getAcademicClassDetail(
     );
 
     if (!response.ok) {
-        throw new Error("Gagal mengambil detail kelas");
+        throw new Error('Gagal mengambil detail kelas');
     }
 
     return response.json();
