@@ -1,22 +1,13 @@
-import { useState } from "react";
-import { scheduleData } from "../../data/academicdata";
+import { useEffect, useState } from "react";
+import {
+    getSchedules,
+    type Schedule,
+} from "../../api/getSchedules";
 
-/* ---------- Konfigurasi minggu (data dummy) ---------- */
-const TODAY_DATE = 21;
-const MONTH_LABEL = "September";
+type IconProps = {
+    className?: string;
+};
 
-const weekDays = [
-    { day: "Sen", fullDay: "Senin", date: 21 },
-    { day: "Sel", fullDay: "Selasa", date: 22 },
-    { day: "Rab", fullDay: "Rabu", date: 23 },
-    { day: "Kam", fullDay: "Kamis", date: 24 },
-    { day: "Jum", fullDay: "Jumat", date: 25 },
-    { day: "Sab", fullDay: "Sabtu", date: 26 },
-    { day: "Min", fullDay: "Minggu", date: 27 },
-];
-
-
-type IconProps = { className?: string };
 const iconBase = {
     width: 14,
     height: 14,
@@ -58,26 +49,111 @@ function PinIcon({ className }: IconProps) {
 
 function CalendarOffIcon({ className }: IconProps) {
     return (
-        <svg {...iconBase} width={22} height={22} className={className}>
+        <svg
+            {...iconBase}
+            width={22}
+            height={22}
+            className={className}
+        >
             <rect x="3" y="4" width="18" height="18" rx="2" />
             <path d="M16 2v4M8 2v4M3 10h18" />
         </svg>
     );
 }
 
-/* ---------- Komponen utama ---------- */
 function CalendarSchedule() {
-    const [selectedDate, setSelectedDate] = useState<number>(TODAY_DATE);
-
-    const selectedSchedules = scheduleData.filter(
-        (schedule) => schedule.date === selectedDate
+    const [schedules, setSchedules] = useState<Schedule[]>([]);
+    const [selectedDate, setSelectedDate] = useState<number>(
+        new Date().getDate()
     );
 
-    const selectedDay = weekDays.find((item) => item.date === selectedDate);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        getSchedules()
+            .then((data) => {
+                setSchedules(data);
+            })
+            .catch((error) => {
+                console.error("Gagal mengambil jadwal:", error);
+            })
+            .finally(() => {
+                setLoading(false);
+            });
+    }, []);
+
+    /*
+     * Membuat data 7 hari berdasarkan minggu sekarang
+     */
+    const today = new Date();
+
+    const currentDay = today.getDay();
+
+    const monday = new Date(today);
+
+    const diffToMonday =
+        currentDay === 0 ? -6 : 1 - currentDay;
+
+    monday.setDate(today.getDate() + diffToMonday);
+
+    const weekDays = Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(monday);
+
+        date.setDate(monday.getDate() + index);
+
+        return {
+            day: date.toLocaleDateString("id-ID", {
+                weekday: "short",
+            }),
+            fullDay: date.toLocaleDateString("id-ID", {
+                weekday: "long",
+            }),
+            date: date.getDate(),
+        };
+    });
+
+    /*
+     * Jadwal berdasarkan tanggal yang dipilih
+     *
+     * Karena database tb_jadwal hanya menyimpan hari
+     * (Senin, Selasa, dst.), kita cocokkan berdasarkan
+     * nama hari.
+     */
+    const selectedDay = weekDays.find(
+        (item) => item.date === selectedDate
+    );
+
+    const selectedSchedules = schedules.filter(
+        (schedule) =>
+            schedule.hari.toLowerCase() ===
+            selectedDay?.fullDay.toLowerCase()
+    );
+
     const dividerLabel =
-        selectedDate === TODAY_DATE
+        selectedDate === today.getDate()
             ? "Today"
-            : `${selectedDay?.fullDay ?? ""}, ${selectedDate} ${MONTH_LABEL}`;
+            : `${selectedDay?.fullDay ?? ""}, ${selectedDate} ${today.toLocaleDateString(
+                  "id-ID",
+                  {
+                      month: "long",
+                  }
+              )}`;
+
+    if (loading) {
+        return (
+            <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="px-5 py-5">
+                    <h2 className="text-base font-semibold text-slate-800">
+                        Jadwal Minggu Ini
+                    </h2>
+
+                    <p className="mt-4 text-xs text-slate-400">
+                        Memuat jadwal...
+                    </p>
+                </div>
+            </section>
+        );
+    }
 
     return (
         <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -92,18 +168,24 @@ function CalendarSchedule() {
             <div className="px-4 pt-6">
                 <div className="grid grid-cols-7 gap-y-1">
                     {weekDays.map((item) => {
-                        const isSelected = selectedDate === item.date;
-                        const hasSchedule = scheduleData.some(
-                            (schedule) => schedule.date === item.date
+                        const isSelected =
+                            selectedDate === item.date;
+
+                        const hasSchedule = schedules.some(
+                            (schedule) =>
+                                schedule.hari.toLowerCase() ===
+                                item.fullDay.toLowerCase()
                         );
 
                         return (
                             <button
                                 key={item.date}
                                 type="button"
-                                onClick={() => setSelectedDate(item.date)}
+                                onClick={() =>
+                                    setSelectedDate(item.date)
+                                }
                                 aria-pressed={isSelected}
-                                aria-label={`${item.fullDay}, ${item.date} ${MONTH_LABEL}`}
+                                aria-label={`${item.fullDay}, ${item.date}`}
                                 className="flex flex-col items-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50"
                             >
                                 <span
@@ -142,9 +224,11 @@ function CalendarSchedule() {
             {/* Divider */}
             <div className="mx-4 my-4 flex items-center gap-3">
                 <div className="h-px flex-1 bg-slate-200" />
+
                 <span className="text-[10px] text-slate-400">
                     {dividerLabel}
                 </span>
+
                 <div className="h-px flex-1 bg-slate-200" />
             </div>
 
@@ -161,21 +245,34 @@ function CalendarSchedule() {
                             }`}
                         >
                             <h3 className="break-words text-sm font-semibold leading-5 text-slate-800">
-                                {schedule.course} ({schedule.code})
+                                {schedule.nama_matkul} (
+                                {schedule.kode_matkul})
                             </h3>
 
                             <ul className="mt-3 space-y-2 text-xs text-slate-500">
                                 <li className="flex items-center gap-2">
                                     <BookIcon className="shrink-0" />
-                                    <span className="min-w-0 break-words">{schedule.session}</span>
+
+                                    <span className="min-w-0 break-words">
+                                        {schedule.nama_kelas}
+                                    </span>
                                 </li>
+
                                 <li className="flex items-center gap-2">
                                     <ClockIcon className="shrink-0" />
-                                    <span className="min-w-0 break-words">{schedule.time}</span>
+
+                                    <span className="min-w-0 break-words">
+                                        {schedule.jam_mulai} -{" "}
+                                        {schedule.jam_selesai}
+                                    </span>
                                 </li>
+
                                 <li className="flex items-center gap-2">
                                     <PinIcon className="shrink-0" />
-                                    <span className="min-w-0 break-words">{schedule.room}</span>
+
+                                    <span className="min-w-0 break-words">
+                                        {schedule.ruangan}
+                                    </span>
                                 </li>
                             </ul>
                         </article>
@@ -183,6 +280,7 @@ function CalendarSchedule() {
                 ) : (
                     <div className="flex flex-col items-center rounded-xl bg-slate-50 py-8 text-slate-400">
                         <CalendarOffIcon />
+
                         <p className="mt-2 text-xs text-slate-500">
                             Tidak ada jadwal kuliah
                         </p>

@@ -1,9 +1,14 @@
-import { taskData } from "../../data/academicdata";
+import { useEffect, useState } from "react";
+import { getTasks, type Task } from "../../api/gettask";
 
 /* ---------- Helper ---------- */
-// Parse "YYYY-MM-DD" sebagai tanggal lokal (menghindari bug zona waktu dari new Date("YYYY-MM-DD"))
+
+// Parse tanggal sebagai tanggal lokal
 function parseLocalDate(value: string): Date {
-    const [year, month, day] = value.split("-").map(Number);
+    const dateOnly = value.substring(0, 10);
+
+    const [year, month, day] = dateOnly.split("-").map(Number);
+
     return new Date(year, (month || 1) - 1, day || 1);
 }
 
@@ -47,12 +52,31 @@ function NotePencilIcon() {
 }
 
 function TaskTugas() {
+    const [tasks, setTasks] = useState<Task[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        getTasks()
+            .then((data) => {
+                setTasks(data);
+            })
+            .catch((error) => {
+                console.error("Gagal mengambil data tugas:", error);
+            })
+            .finally(() => {
+                setLoading(false);
+            });
+    }, []);
+
+    /* ---------- Filter tugas yang masih aktif ---------- */
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const activeTasks = taskData.filter((task) => {
+    const activeTasks = tasks.filter((task) => {
         const deadline = parseLocalDate(task.deadline);
-        return !task.completed && deadline >= today;
+
+        return deadline >= today;
     });
 
     return (
@@ -62,6 +86,7 @@ function TaskTugas() {
                 <h2 className="min-w-0 break-words text-base font-semibold text-slate-800">
                     Tugas Belum Dikumpulkan
                 </h2>
+
                 <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-semibold text-white">
                     {activeTasks.length}
                 </span>
@@ -71,9 +96,20 @@ function TaskTugas() {
 
             {/* Isi */}
             <div className="p-4">
-                {activeTasks.length > 0 ? (
+
+                {/* Loading */}
+                {loading ? (
+                    <div className="py-6 text-center">
+                        <p className="text-xs text-slate-500">
+                            Memuat tugas...
+                        </p>
+                    </div>
+
+                ) : activeTasks.length > 0 ? (
+
                     <div className="space-y-3">
                         {activeTasks.map((task) => {
+
                             const formattedDeadline = parseLocalDate(
                                 task.deadline
                             ).toLocaleDateString("id-ID", {
@@ -88,24 +124,32 @@ function TaskTugas() {
                                     className="rounded-xl border-l-4 border-orange-400 bg-orange-50 px-4 py-4"
                                 >
                                     <h3 className="break-words text-sm font-semibold leading-5 text-slate-800">
-                                        {task.title}
+                                        {task.judul}
                                     </h3>
+
                                     <p className="mt-1 break-words text-xs text-slate-500">
-                                        {task.course}
+                                        {task.nama_matkul}
                                     </p>
+
                                     <div className="mt-3 flex items-center gap-2 text-xs text-orange-600">
                                         <ClockIcon />
-                                        <span className="break-words">Deadline {formattedDeadline}</span>
+
+                                        <span className="break-words">
+                                            Deadline {formattedDeadline}
+                                        </span>
                                     </div>
                                 </article>
                             );
                         })}
                     </div>
+
                 ) : (
+
                     <div className="flex flex-col items-center py-6">
                         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-200/70 text-slate-400">
                             <NotePencilIcon />
                         </div>
+
                         <p className="mt-4 text-xs text-slate-500">
                             Tidak ada tugas yang perlu dikumpulkan
                         </p>
