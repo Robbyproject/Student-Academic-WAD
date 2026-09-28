@@ -1,5 +1,6 @@
 import type { UserProfile } from '../../types/user';
 import UserManagement from './sections/UserManagement';
+import AcademicManagement from './sections/AcademicManagement';
 
 type AdminDashboardProps = { user: UserProfile; onLogout: () => void };
 
@@ -10,6 +11,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       <div className="mx-auto max-w-6xl px-4 py-7 sm:px-8"><div className="mb-6"><p className="text-xs font-semibold uppercase tracking-wider text-cyan-800">Panel administrasi</p><h1 className="mt-1 text-2xl font-semibold">Manajemen akun</h1></div>
         <div className="mb-5 grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Mahasiswa</p><p className="mt-2 text-2xl font-semibold">Data API</p></div><div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Dosen</p><p className="mt-2 text-2xl font-semibold">Data API</p></div><div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Status akses</p><p className="mt-2 text-base font-semibold text-emerald-700">Administrator</p></div></div>
         <UserManagement />
+        <AcademicManagement />
       </div>
     </main>
   );
