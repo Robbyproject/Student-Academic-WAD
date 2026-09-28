@@ -1,5 +1,14 @@
 # React + TypeScript + Vite
 
+## Authentication API
+
+Set `VITE_API_URL` to the backend API base URL. Login and logout use `login`
+and `logout` relative to that URL by default. If the backend uses different
+routes, set `VITE_AUTH_LOGIN_ENDPOINT` and `VITE_AUTH_LOGOUT_ENDPOINT` in `.env`;
+each value can be a relative path or a complete URL. The login response should
+include the account role (`mahasiswa`, `dosen`, or `admin`/`staff`) and may include
+a bearer token and user profile fields.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
