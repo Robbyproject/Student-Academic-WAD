@@ -5,9 +5,10 @@ type NavbarProps = {
   user: UserProfile;
   activePage: 'dashboard' | 'profile';
   onNavigate: (page: 'dashboard' | 'profile') => void;
+  onLogout: () => void;
 };
 
-export const Navbar: React.FC<NavbarProps> = ({ user, activePage, onNavigate }) => {
+export const Navbar: React.FC<NavbarProps> = ({ user, activePage, onNavigate, onLogout }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
 
   return (
@@ -84,7 +85,7 @@ export const Navbar: React.FC<NavbarProps> = ({ user, activePage, onNavigate }) 
             <button className="w-full text-left px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg cursor-pointer">
               Ubah Kata Sandi
             </button>
-            <button className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg mt-1 border-t border-slate-100 cursor-pointer">
+            <button onClick={onLogout} className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg mt-1 border-t border-slate-100 cursor-pointer">
               Logout
             </button>
           </div>

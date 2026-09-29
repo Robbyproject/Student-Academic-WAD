@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import Lenis from 'lenis';
 import type { UserProfile } from './types/user';
+import { login, logout, type AuthSession } from './api/auth';
+import LoginPage from './components/Auth/LoginPage';
 import { Navbar } from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import type { Course } from './sections/Kelas/Page';
@@ -22,6 +24,8 @@ const Kelas = lazy(() => import('./sections/Kelas/Page'));
 const KelasDetail = lazy(() =>
   import('./sections/Kelas/KelasDetail/Page')
 );
+const LecturerDashboard = lazy(() => import('./pages/dosen/Dashboard'));
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
 
 export type ActivePage = 'dashboard' | 'profile';
 
@@ -111,40 +115,8 @@ function DetailSkeleton() {
   );
 }
 
-export function App() {
-  // Check apakah user sudah memiliki token
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return Boolean(localStorage.getItem('token'));
-  });
-
-  const [user, setUser] = useState<UserProfile>(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        return {
-          nama: parsed.name || parsed.nama || '',
-          nim: parsed.nim || '',
-          prodi: parsed.prodi || '',
-          email: parsed.email || '',
-          noTelepon: parsed.no_telepon || parsed.noTelepon || '',
-          jenisKelamin: parsed.jenis_kelamin || parsed.jenisKelamin || '',
-        };
-      } catch (e) {
-        console.error('Failed to parse user data', e);
-      }
-    }
-
-    // Fallback default nilai kosong (tanpa data pribadi)
-    return {
-      nama: '',
-      nim: '',
-      prodi: '',
-      email: '',
-      noTelepon: '',
-      jenisKelamin: '',
-    };
-  });
+function StudentPortal({ user, onLogout }: { user: UserProfile; onLogout: () => void }) {
+  const isAuthenticated = Boolean(user);
 
   const [activePage, setActivePage] =
     useState<ActivePage>(getStoredPage);
@@ -229,6 +201,7 @@ export function App() {
         user={user}
         activePage={activePage}
         onNavigate={handleNavigate}
+        onLogout={onLogout}
       />
 
       <main className="grid min-h-0 w-full flex-1 grid-cols-1 items-stretch gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-6 lg:overflow-hidden">
@@ -272,6 +245,52 @@ export function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+function getStoredSession(): AuthSession | null {
+  try {
+    const stored = sessionStorage.getItem('academic-auth-session');
+    if (!stored) return null;
+    const session = JSON.parse(stored) as AuthSession;
+    if (!session.user || !['mahasiswa', 'dosen', 'admin'].includes(session.role)) return null;
+    return session;
+  } catch {
+    sessionStorage.removeItem('academic-auth-session');
+    return null;
+  }
+}
+
+export function App() {
+  const [session, setSession] = useState<AuthSession | null>(getStoredSession);
+
+  async function handleLogin(email: string, password: string) {
+    const nextSession = await login({ email, password });
+    sessionStorage.setItem('academic-auth-session', JSON.stringify(nextSession));
+    setSession(nextSession);
+  }
+
+  async function handleLogout() {
+    const logoutRequest = logout(session?.token ?? null).catch(() => undefined);
+    sessionStorage.removeItem('academic-auth-session');
+    setSession(null);
+    await logoutRequest;
+  }
+
+  if (!session) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Memuat dashboard...</div>}>
+      {session.role === 'mahasiswa' ? (
+        <StudentPortal user={session.user} onLogout={handleLogout} />
+      ) : session.role === 'dosen' ? (
+        <LecturerDashboard user={session.user} onLogout={handleLogout} />
+      ) : (
+        <AdminDashboard user={session.user} onLogout={handleLogout} />
+      )}
+    </Suspense>
   );
 }
 
