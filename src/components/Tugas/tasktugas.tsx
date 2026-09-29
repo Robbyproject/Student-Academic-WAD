@@ -56,7 +56,10 @@ function TaskTugas() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        getTasks()
+        // ID mahasiswa Arya di tabel mahasiswa
+        const mahasiswaId = 1;
+
+        getTasks(mahasiswaId)
             .then((data) => {
                 setTasks(data);
             })
@@ -96,7 +99,6 @@ function TaskTugas() {
 
             {/* Isi */}
             <div className="p-4">
-
                 {/* Loading */}
                 {loading ? (
                     <div className="py-6 text-center">
@@ -104,12 +106,9 @@ function TaskTugas() {
                             Memuat tugas...
                         </p>
                     </div>
-
                 ) : activeTasks.length > 0 ? (
-
                     <div className="space-y-3">
                         {activeTasks.map((task) => {
-
                             const formattedDeadline = parseLocalDate(
                                 task.deadline
                             ).toLocaleDateString("id-ID", {
@@ -142,9 +141,7 @@ function TaskTugas() {
                             );
                         })}
                     </div>
-
                 ) : (
-
                     <div className="flex flex-col items-center py-6">
                         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-200/70 text-slate-400">
                             <NotePencilIcon />
