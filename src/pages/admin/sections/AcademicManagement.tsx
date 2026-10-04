@@ -1,644 +1,547 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
-type Account = {
-    name: string;
-    email: string;
-    role: string;
+type Department = {
+  id: number;
+  kode_jurusan: string;
+  nama_jurusan: string;
 };
 
-
-type Jurusan = {
-    id: number;
-    kode_jurusan: string;
-    nama_jurusan: string;
+type Lecturer = {
+  id: number;
+  nama: string;
+  nidn: string;
+  jurusan_id: number;
 };
 
-type Dosen = {
-    id: number;
-    nama: string;
-    nidn: string;
-    jurusan_id: number;
+type Course = {
+  id: number;
+  kode_matkul: string;
+  nama_matkul: string;
+  sks: number;
+  jurusan_id: number;
 };
 
-type Matkul = {
-    id: number;
-    kode_matkul: string;
-    nama_matkul: string;
-    sks: number;
-    jurusan_id: number;
+type AcademicClass = {
+  id: number;
+  nama_kelas: string;
+  tahun_ajaran: string;
+  term?: 'ganjil' | 'genap';
+  kode_matkul: string;
+  nama_matkul: string;
+  nama_dosen: string;
 };
 
-export default function UserManagement() {
-    const [accounts, setAccounts] = useState<Account[]>([]);
-    const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
-    const [role, setRole] = useState('mahasiswa');
-    const [notice, setNotice] = useState('');
-    const [jurusan, setJurusan] = useState<Jurusan[]>([]);
-    const [dosen, setDosen] = useState<Dosen[]>([]);
-    const [matkul, setMatkul] = useState<Matkul[]>([]);
-    const [selectedJurusan, setSelectedJurusan] = useState('');
-    const [selectedDosen, setSelectedDosen] = useState('');
-    const [selectedMatkul, setSelectedMatkul] = useState('');
-    const [namaKelas, setNamaKelas] = useState('');
-    const [tahunAjaran, setTahunAjaran] = useState('2026/2027');
-    const [hari, setHari] = useState('Senin');
-    const [jamMulai, setJamMulai] = useState('08:00');
-    const [jamSelesai, setJamSelesai] = useState('10:00');
-    const [ruangan, setRuangan] = useState('');
-    const [academicLoading, setAcademicLoading] = useState(true);
-    const [academicNotice, setAcademicNotice] = useState('');
-    const [academicError, setAcademicError] = useState('');
-    const API_URL = import.meta.env.VITE_API_URL;
+type Props = {
+  token: string | null;
+};
 
-    useEffect(() => {
-        async function getAcademicData() {
-            try {
-                setAcademicLoading(true);
-                setAcademicError('');
+const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? '';
+const inputClass =
+  'mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-cyan-600 disabled:bg-slate-100 disabled:text-slate-400';
 
-                const response = await fetch(
-                    `${API_URL}/admin/academic-data`
-                );
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : {};
+}
 
-                if (!response.ok) {
-                    throw new Error(
-                        `Gagal mengambil data akademik (${response.status})`
-                    );
-                }
+function getCollection<T>(payload: unknown, key: string): T[] {
+  let current = payload;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (Array.isArray(current)) return current as T[];
+    const record = asRecord(current);
+    if (Array.isArray(record[key])) return record[key] as T[];
+    current = record.data ?? record[key];
+  }
+  return [];
+}
 
-                const data = await response.json();
-                console.log('DATA AKADEMIK:', data);
-                setJurusan(data.jurusan ?? []);
-                setDosen(data.dosen ?? []);
-                setMatkul(data.matkul ?? []);
-                if (data.jurusan?.length > 0) {
-                    setSelectedJurusan(String(data.jurusan[0].id));
-                }
-            } catch (error) {
-                console.error(
-                    'Gagal mengambil data akademik:',
-                    error
-                );
+function responseError(payload: unknown, status: number): string {
+  const body = asRecord(payload);
+  if (typeof body.message === 'string') return body.message;
+  const errors = asRecord(body.errors);
+  const firstError = Object.values(errors).flatMap((value) =>
+    Array.isArray(value) ? value : [value]
+  )[0];
+  return typeof firstError === 'string'
+    ? firstError
+    : `Permintaan gagal (${status}).`;
+}
 
-                setAcademicError(
-                    'Data jurusan, dosen, atau mata kuliah gagal dimuat.'
-                );
-            } finally {
-                setAcademicLoading(false);
-            }
-        }
+export default function AcademicManagement({ token }: Props) {
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [lecturers, setLecturers] = useState<Lecturer[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [classes, setClasses] = useState<AcademicClass[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState('');
 
-        getAcademicData();
-    }, [API_URL]);
+  const [departmentId, setDepartmentId] = useState('');
+  const [lecturerId, setLecturerId] = useState('');
+  const [courseId, setCourseId] = useState('');
+  const [className, setClassName] = useState('');
+  const [yearStart, setYearStart] = useState('2026');
+  const [term, setTerm] = useState<'ganjil' | 'genap'>('ganjil');
+  const [day, setDay] = useState('Senin');
+  const [startTime, setStartTime] = useState('08:00');
+  const [endTime, setEndTime] = useState('10:00');
+  const [room, setRoom] = useState('');
+  const [savingClass, setSavingClass] = useState(false);
+  const [classError, setClassError] = useState('');
+  const [classNotice, setClassNotice] = useState('');
 
-    const filteredDosen = dosen.filter(
-        (item) =>
-            String(item.jurusan_id) === selectedJurusan
-    );
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [offeringYearStart, setOfferingYearStart] = useState('2026');
+  const [offeringTerm, setOfferingTerm] =
+    useState<'ganjil' | 'genap'>('ganjil');
+  const [savingOffering, setSavingOffering] = useState(false);
+  const [offeringError, setOfferingError] = useState('');
+  const [offeringNotice, setOfferingNotice] = useState('');
 
-    const filteredMatkul = matkul.filter(
-        (item) =>
-            String(item.jurusan_id) === selectedJurusan
-    );
+  const filteredLecturers = useMemo(
+    () =>
+      lecturers.filter(
+        (lecturer) => String(lecturer.jurusan_id) === departmentId
+      ),
+    [departmentId, lecturers]
+  );
+  const filteredCourses = useMemo(
+    () =>
+      courses.filter((course) => String(course.jurusan_id) === departmentId),
+    [courses, departmentId]
+  );
 
-    function handleSubmit(
-        event: FormEvent<HTMLFormElement>
-    ) {
-        event.preventDefault();
+  async function request(path: string, init: RequestInit = {}) {
+    if (!API_URL) throw new Error('VITE_API_URL belum dikonfigurasi.');
+    if (!token) throw new Error('Token admin tidak tersedia. Silakan login ulang.');
 
-        setAccounts((current) => [
-            {
-                name,
-                email,
-                role,
-            },
-            ...current,
-        ]);
+    const response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: {
+        Accept: 'application/json',
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        Authorization: `Bearer ${token}`,
+        ...init.headers,
+      },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(responseError(payload, response.status));
+    return payload;
+  }
 
-        setNotice(
-            `Akun ${role} untuk ${email} ditambahkan ke pratinjau lokal.`
+  async function loadClasses() {
+    const payload = await request('/academic-classes');
+    setClasses(getCollection<AcademicClass>(payload, 'classes'));
+  }
+
+  async function loadAcademicData() {
+    setLoading(true);
+    setDataError('');
+    try {
+      const payload = await request('/admin/academic-data');
+      const body = asRecord(payload);
+      const data = asRecord(body.data ?? payload);
+      const nextDepartments = getCollection<Department>(data, 'jurusan');
+      setDepartments(nextDepartments);
+      setLecturers(getCollection<Lecturer>(data, 'dosen'));
+      setCourses(getCollection<Course>(data, 'matkul'));
+      if (nextDepartments.length) {
+        const firstDepartmentId = String(nextDepartments[0].id);
+        setDepartmentId((current) => current || firstDepartmentId);
+      }
+
+      try {
+        await loadClasses();
+      } catch (loadError) {
+        console.error('Gagal mengambil kelas untuk pembaruan periode:', loadError);
+        setDataError(
+          loadError instanceof Error
+            ? `Data jurusan berhasil dimuat, tetapi daftar kelas gagal dimuat: ${loadError.message}`
+            : 'Daftar kelas gagal dimuat.'
         );
-
-        setName('');
-        setEmail('');
+      }
+    } catch (loadError) {
+      console.error('Gagal mengambil data akademik:', loadError);
+      setDataError(
+        loadError instanceof Error
+          ? loadError.message
+          : 'Data jurusan, dosen, dan mata kuliah gagal dimuat.'
+      );
+    } finally {
+      setLoading(false);
     }
+  }
 
-    async function handleCreateClass(
-        event: FormEvent<HTMLFormElement>
-    ) {
-        event.preventDefault();
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadAcademicData();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+    // loadAcademicData uses the current bearer token for all admin API requests.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
-        setAcademicNotice('');
-        setAcademicError('');
+  async function createClass(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setClassError('');
+    setClassNotice('');
+    setSavingClass(true);
+    try {
+      await request('/admin/academic-classes', {
+        method: 'POST',
+        body: JSON.stringify({
+          dosen_id: Number(lecturerId),
+          matkul_id: Number(courseId),
+          nama_kelas: className.trim(),
+          tahun_ajaran: `${yearStart}/${Number(yearStart) + 1}`,
+          term,
+          hari: day,
+          jam_mulai: startTime,
+          jam_selesai: endTime,
+          ruangan: room.trim(),
+        }),
+      });
+      setClassNotice('Kelas dan jadwal berhasil dibuat.');
+      setLecturerId('');
+      setCourseId('');
+      setClassName('');
+      setRoom('');
+      await loadClasses();
+    } catch (saveError) {
+      console.error('Gagal membuat kelas dan jadwal:', saveError);
+      setClassError(
+        saveError instanceof Error
+          ? saveError.message
+          : 'Gagal membuat kelas dan jadwal.'
+      );
+    } finally {
+      setSavingClass(false);
+    }
+  }
 
-        if (!selectedJurusan) {
-            setAcademicError('Silakan pilih jurusan.');
-            return;
+  async function updateClassOffering(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setOfferingError('');
+    setOfferingNotice('');
+    setSavingOffering(true);
+    try {
+      await request(
+        `/admin/academic-classes/${selectedClassId}/offering`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            tahun_ajaran: `${offeringYearStart}/${Number(offeringYearStart) + 1}`,
+            term: offeringTerm,
+          }),
         }
+      );
+      setOfferingNotice('Periode penawaran kelas berhasil diperbarui.');
+      await loadClasses();
+    } catch (saveError) {
+      console.error('Gagal memperbarui periode penawaran kelas:', saveError);
+      setOfferingError(
+        saveError instanceof Error
+          ? saveError.message
+          : 'Gagal memperbarui periode penawaran kelas.'
+      );
+    } finally {
+      setSavingOffering(false);
+    }
+  }
 
-        if (!selectedDosen) {
-            setAcademicError('Silakan pilih dosen.');
-            return;
-        }
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <div className="mb-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-800">
+          Akademik
+        </p>
+        <h2 className="mt-1 text-xl font-semibold text-slate-900">
+          Kelas & Jadwal
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Buat penawaran kelas pada tahun ajaran dan semester aktif, atau perbarui
+          periode kelas yang sudah ada.
+        </p>
+      </div>
 
-        if (!selectedMatkul) {
-            setAcademicError('Silakan pilih mata kuliah.');
-            return;
-        }
+      {loading ? (
+        <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
+          Memuat data akademik...
+        </p>
+      ) : (
+        <>
+          {dataError && (
+            <p
+              aria-live="polite"
+              className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
+              {dataError}
+            </p>
+          )}
+          <form
+            className="grid gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-3"
+            onSubmit={createClass}
+          >
+            <label className="text-sm font-medium text-slate-700">
+              Jurusan
+              <select
+                className={inputClass}
+                onChange={(event) => {
+                  setDepartmentId(event.target.value);
+                  setLecturerId('');
+                  setCourseId('');
+                }}
+                required
+                value={departmentId}
+              >
+                <option value="">Pilih jurusan</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.kode_jurusan} - {department.nama_jurusan}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        try {
-            const response = await fetch(
-                `${API_URL}/admin/academic-classes`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json',
-                    },
-                    body: JSON.stringify({
-                        dosen_id: Number(selectedDosen),
-                        matkul_id: Number(selectedMatkul),
-                        nama_kelas: namaKelas,
-                        tahun_ajaran: tahunAjaran,
-                        hari,
-                        jam_mulai: jamMulai,
-                        jam_selesai: jamSelesai,
-                        ruangan,
-                    }),
+            <label className="text-sm font-medium text-slate-700">
+              Dosen
+              <select
+                className={inputClass}
+                disabled={!departmentId}
+                onChange={(event) => setLecturerId(event.target.value)}
+                required
+                value={lecturerId}
+              >
+                <option value="">Pilih dosen</option>
+                {filteredLecturers.map((lecturer) => (
+                  <option key={lecturer.id} value={lecturer.id}>
+                    {lecturer.nama}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-sm font-medium text-slate-700">
+              Mata Kuliah
+              <select
+                className={inputClass}
+                disabled={!departmentId}
+                onChange={(event) => setCourseId(event.target.value)}
+                required
+                value={courseId}
+              >
+                <option value="">Pilih mata kuliah</option>
+                {filteredCourses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.kode_matkul} - {course.nama_matkul}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-sm font-medium text-slate-700">
+              Nama Kelas
+              <input
+                className={inputClass}
+                onChange={(event) => setClassName(event.target.value)}
+                placeholder="Contoh: IF-A"
+                required
+                value={className}
+              />
+            </label>
+
+            <label className="text-sm font-medium text-slate-700">
+              Tahun Ajaran
+              <input
+                className={inputClass}
+                max="2100"
+                min="2000"
+                onChange={(event) => setYearStart(event.target.value)}
+                required
+                type="number"
+                value={yearStart}
+              />
+              <span className="mt-1 block text-xs text-slate-500">
+                Dikirim sebagai {yearStart}/{Number(yearStart) + 1}
+              </span>
+            </label>
+
+            <label className="text-sm font-medium text-slate-700">
+              Semester
+              <select
+                className={inputClass}
+                onChange={(event) =>
+                  setTerm(event.target.value as 'ganjil' | 'genap')
                 }
-            );
+                value={term}
+              >
+                <option value="ganjil">Ganjil</option>
+                <option value="genap">Genap</option>
+              </select>
+            </label>
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(
-                    data.message ||
-                        'Gagal membuat kelas dan jadwal.'
-                );
-            }
-
-            setAcademicNotice(
-                'Kelas dan jadwal berhasil dibuat.'
-            );
-
-            setSelectedDosen('');
-            setSelectedMatkul('');
-            setNamaKelas('');
-            setTahunAjaran('2026/2027');
-            setHari('Senin');
-            setJamMulai('08:00');
-            setJamSelesai('10:00');
-            setRuangan('');
-        } catch (error) {
-            console.error(
-                'Gagal membuat kelas:',
-                error
-            );
-
-            setAcademicError(
-                error instanceof Error
-                    ? error.message
-                    : 'Gagal membuat kelas dan jadwal.'
-            );
-        }
-    }
-
-    return (
-        <div className="space-y-5">
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
-                <div className="mb-4">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Pengguna
-                    </p>
-
-                    <h2 className="mt-1 text-lg font-semibold">
-                        Buat akun kampus
-                    </h2>
-                </div>
-
-                <form
-                    className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end"
-                    onSubmit={handleSubmit}
-                >
-                    <label className="text-sm font-medium text-slate-700">
-                        Nama
-
-                        <input
-                            className="mt-2 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-cyan-600"
-                            onChange={(event) =>
-                                setName(event.target.value)
-                            }
-                            required
-                            value={name}
-                        />
-                    </label>
-
-                    <label className="text-sm font-medium text-slate-700">
-                        Email
-
-                        <input
-                            className="mt-2 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-cyan-600"
-                            onChange={(event) =>
-                                setEmail(event.target.value)
-                            }
-                            required
-                            type="email"
-                            value={email}
-                        />
-                    </label>
-
-                    <label className="text-sm font-medium text-slate-700">
-                        Peran
-
-                        <select
-                            className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-cyan-600"
-                            onChange={(event) =>
-                                setRole(event.target.value)
-                            }
-                            value={role}
-                        >
-                            <option value="mahasiswa">
-                                Mahasiswa
-                            </option>
-
-                            <option value="dosen">
-                                Dosen
-                            </option>
-                        </select>
-                    </label>
-
-                    <button
-                        className="h-10 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700"
-                        type="submit"
-                    >
-                        Buat akun
-                    </button>
-                </form>
-
-                {notice && (
-                    <p
-                        aria-live="polite"
-                        className="mt-3 text-sm text-cyan-800"
-                    >
-                        {notice}
-                    </p>
+            <label className="text-sm font-medium text-slate-700">
+              Hari
+              <select
+                className={inputClass}
+                onChange={(event) => setDay(event.target.value)}
+                value={day}
+              >
+                {['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'].map(
+                  (item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  )
                 )}
+              </select>
+            </label>
 
-                <div className="mt-6 overflow-x-auto">
-                    <table className="w-full min-w-[420px] text-left text-sm">
-                        <thead className="border-y border-slate-200 text-xs text-slate-500">
-                            <tr>
-                                <th className="py-3 font-medium">
-                                    Nama
-                                </th>
+            <label className="text-sm font-medium text-slate-700">
+              Jam Mulai
+              <input
+                className={inputClass}
+                onChange={(event) => setStartTime(event.target.value)}
+                required
+                type="time"
+                value={startTime}
+              />
+            </label>
 
-                                <th className="py-3 font-medium">
-                                    Email
-                                </th>
+            <label className="text-sm font-medium text-slate-700">
+              Jam Selesai
+              <input
+                className={inputClass}
+                onChange={(event) => setEndTime(event.target.value)}
+                required
+                type="time"
+                value={endTime}
+              />
+            </label>
 
-                                <th className="py-3 font-medium">
-                                    Peran
-                                </th>
-                            </tr>
-                        </thead>
+            <label className="text-sm font-medium text-slate-700">
+              Ruangan
+              <input
+                className={inputClass}
+                onChange={(event) => setRoom(event.target.value)}
+                placeholder="Contoh: Lab Komputer"
+                required
+                value={room}
+              />
+            </label>
 
-                        <tbody>
-                            {accounts.length ? (
-                                accounts.map(
-                                    (account, index) => (
-                                        <tr
-                                            className="border-b border-slate-100"
-                                            key={`${account.email}-${index}`}
-                                        >
-                                            <td className="py-3 font-medium">
-                                                {account.name}
-                                            </td>
+            {(classError || classNotice) && (
+              <p
+                aria-live="polite"
+                className={`rounded-lg px-3 py-2 text-sm sm:col-span-2 lg:col-span-3 ${
+                  classError
+                    ? 'bg-red-50 text-red-700'
+                    : 'bg-emerald-50 text-emerald-700'
+                }`}
+              >
+                {classError || classNotice}
+              </p>
+            )}
 
-                                            <td className="py-3 text-slate-600">
-                                                {account.email}
-                                            </td>
+            <div className="sm:col-span-2 lg:col-span-3">
+              <button
+                className="h-10 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={
+                  savingClass ||
+                  !filteredLecturers.length ||
+                  !filteredCourses.length
+                }
+                type="submit"
+              >
+                {savingClass ? 'Menyimpan...' : 'Buat Kelas & Jadwal'}
+              </button>
+            </div>
+          </form>
 
-                                            <td className="py-3 capitalize text-slate-600">
-                                                {account.role}
-                                            </td>
-                                        </tr>
-                                    )
-                                )
-                            ) : (
-                                <tr>
-                                    <td
-                                        className="py-5 text-slate-500"
-                                        colSpan={3}
-                                    >
-                                        Belum ada akun baru pada
-                                        sesi ini.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+          <div className="my-6 border-t border-slate-200" />
 
-                <p className="mt-3 text-xs text-slate-400">
-                    Data akun saat ini hanya pratinjau lokal.
-                </p>
-            </section>
-
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
-                <div className="mb-5">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-cyan-800">
-                        Akademik
-                    </p>
-
-                    <h2 className="mt-1 text-xl font-semibold text-slate-900">
-                        Manajemen Kelas & Jadwal
-                    </h2>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                        Atur dosen, mata kuliah, kelas, dan jadwal
-                        perkuliahan.
-                    </p>
-                </div>
-
-                {academicLoading ? (
-                    <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
-                        Memuat data akademik...
-                    </div>
-                ) : (
-                    <form
-                        className="grid gap-x-4 gap-y-4 sm:grid-cols-2"
-                        onSubmit={handleCreateClass}
-                    >
-                        {/* JURUSAN */}
-
-                        <label className="text-sm font-medium text-slate-700">
-                            Jurusan
-
-                            <select
-                                className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-cyan-600"
-                                value={selectedJurusan}
-                                onChange={(event) => {
-                                    setSelectedJurusan(
-                                        event.target.value
-                                    );
-
-                                    setSelectedDosen('');
-                                    setSelectedMatkul('');
-                                }}
-                                required
-                            >
-                                <option value="">
-                                    Pilih jurusan
-                                </option>
-
-                                {jurusan.map((item) => (
-                                    <option
-                                        key={item.id}
-                                        value={item.id}
-                                    >
-                                        {item.kode_jurusan} -{' '}
-                                        {item.nama_jurusan}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <label className="text-sm font-medium text-slate-700">
-                            Dosen
-
-                            <select
-                                className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-cyan-600 disabled:bg-slate-100 disabled:text-slate-400"
-                                value={selectedDosen}
-                                onChange={(event) =>
-                                    setSelectedDosen(
-                                        event.target.value
-                                    )
-                                }
-                                disabled={!selectedJurusan}
-                                required
-                            >
-                                <option value="">
-                                    Pilih dosen
-                                </option>
-
-                                {filteredDosen.map((item) => (
-                                    <option
-                                        key={item.id}
-                                        value={item.id}
-                                    >
-                                        {item.nama}
-                                    </option>
-                                ))}
-                            </select>
-
-                            {selectedJurusan &&
-                                filteredDosen.length === 0 && (
-                                    <p className="mt-1 text-xs text-orange-600">
-                                        Belum ada dosen pada
-                                        jurusan ini.
-                                    </p>
-                                )}
-                        </label>
-
-                        <label className="text-sm font-medium text-slate-700">
-                            Mata Kuliah
-                            <select
-                                className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-cyan-600 disabled:bg-slate-100 disabled:text-slate-400"
-                                value={selectedMatkul}
-                                onChange={(event) =>
-                                    setSelectedMatkul(
-                                        event.target.value
-                                    )
-                                }
-                                disabled={!selectedJurusan}
-                                required
-                            >
-                                <option value="">
-                                    Pilih mata kuliah
-                                </option>
-
-                                {filteredMatkul.map((item) => (
-                                    <option
-                                        key={item.id}
-                                        value={item.id}
-                                    >
-                                        {item.kode_matkul} -{' '}
-                                        {item.nama_matkul}
-                                    </option>
-                                ))}
-                            </select>
-
-                            {selectedJurusan &&
-                                filteredMatkul.length === 0 && (
-                                    <p className="mt-1 text-xs text-orange-600">
-                                        Belum ada mata kuliah pada
-                                        jurusan ini.
-                                    </p>
-                                )}
-                        </label>
-
-                        <label className="text-sm font-medium text-slate-700">
-                            Kode Kelas
-
-                            <input
-                                className="mt-2 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-cyan-600"
-                                placeholder="Contoh: SDLC4"
-                                value={namaKelas}
-                                onChange={(event) =>
-                                    setNamaKelas(
-                                        event.target.value
-                                    )
-                                }
-                                required
-                            />
-                        </label>
-
-                        <label className="text-sm font-medium text-slate-700">
-                            Tahun Ajaran
-                            <input
-                                className="mt-2 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-cyan-600"
-                                value={tahunAjaran}
-                                onChange={(event) =>
-                                    setTahunAjaran(
-                                        event.target.value
-                                    )
-                                }
-                                placeholder="2026/2027"
-                                required
-                            />
-                        </label>
-
-                        <label className="text-sm font-medium text-slate-700">
-                            Hari
-                            <select
-                                className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-cyan-600"
-                                value={hari}
-                                onChange={(event) =>
-                                    setHari(event.target.value)
-                                }
-                                required
-                            >
-                                <option value="Senin">
-                                    Senin
-                                </option>
-
-                                <option value="Selasa">
-                                    Selasa
-                                </option>
-
-                                <option value="Rabu">
-                                    Rabu
-                                </option>
-
-                                <option value="Kamis">
-                                    Kamis
-                                </option>
-
-                                <option value="Jumat">
-                                    Jumat
-                                </option>
-
-                                <option value="Sabtu">
-                                    Sabtu
-                                </option>
-                            </select>
-                        </label>
-
-                        <label className="text-sm font-medium text-slate-700">
-                            Jam Mulai
-
-                            <input
-                                className="mt-2 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-cyan-600"
-                                type="time"
-                                value={jamMulai}
-                                onChange={(event) =>
-                                    setJamMulai(
-                                        event.target.value
-                                    )
-                                }
-                                required
-                            />
-                        </label>
-
-                        <label className="text-sm font-medium text-slate-700">
-                            Jam Selesai
-
-                            <input
-                                className="mt-2 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-cyan-600"
-                                type="time"
-                                value={jamSelesai}
-                                onChange={(event) =>
-                                    setJamSelesai(
-                                        event.target.value
-                                    )
-                                }
-                                required
-                            />
-                        </label>
-
-                        <label className="text-sm font-medium text-slate-700">
-                            Ruangan
-
-                            <input
-                                className="mt-2 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-cyan-600"
-                                placeholder="Contoh: Computer Lab"
-                                value={ruangan}
-                                onChange={(event) =>
-                                    setRuangan(
-                                        event.target.value
-                                    )
-                                }
-                                required
-                            />
-                        </label>
-
-                        {(academicError ||
-                            academicNotice) && (
-                            <div className="sm:col-span-2">
-                                {academicError && (
-                                    <p
-                                        className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
-                                        aria-live="polite"
-                                    >
-                                        {academicError}
-                                    </p>
-                                )}
-
-                                {academicNotice && (
-                                    <p
-                                        className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
-                                        aria-live="polite"
-                                    >
-                                        {academicNotice}
-                                    </p>
-                                )}
-                            </div>
-                        )}
-
-                        <div className="sm:col-span-2">
-                            <button
-                                className="h-10 rounded-lg bg-slate-900 px-5 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                type="submit"
-                                disabled={
-                                    !selectedDosen ||
-                                    !selectedMatkul
-                                }
-                            >
-                                Buat Kelas & Jadwal
-                            </button>
-                        </div>
-                    </form>
-                )}
-
-                {academicError &&
-                    !academicLoading &&
-                    jurusan.length === 0 && (
-                        <p className="mt-4 text-sm text-red-600">
-                            {academicError}
-                        </p>
-                    )}
-            </section>
-        </div>
-    );
+          <div className="mb-4">
+            <h3 className="text-base font-semibold text-slate-900">
+              Perbarui Periode Penawaran Kelas
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Atur tahun ajaran dan term untuk kelas yang sudah terdaftar, termasuk
+              kelas lama.
+            </p>
+          </div>
+          <form
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end"
+            onSubmit={updateClassOffering}
+          >
+            <label className="text-sm font-medium text-slate-700">
+              Kelas
+              <select
+                className={inputClass}
+                onChange={(event) => setSelectedClassId(event.target.value)}
+                required
+                value={selectedClassId}
+              >
+                <option value="">Pilih kelas</option>
+                {classes.map((academicClass) => (
+                  <option key={academicClass.id} value={academicClass.id}>
+                    {academicClass.kode_matkul} - {academicClass.nama_matkul} (
+                    {academicClass.nama_kelas})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Tahun Ajaran
+              <input
+                className={inputClass}
+                max="2100"
+                min="2000"
+                onChange={(event) => setOfferingYearStart(event.target.value)}
+                required
+                type="number"
+                value={offeringYearStart}
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Semester
+              <select
+                className={inputClass}
+                onChange={(event) =>
+                  setOfferingTerm(event.target.value as 'ganjil' | 'genap')
+                }
+                value={offeringTerm}
+              >
+                <option value="ganjil">Ganjil</option>
+                <option value="genap">Genap</option>
+              </select>
+            </label>
+            <button
+              className="h-10 rounded-lg border border-cyan-700 px-4 text-sm font-semibold text-cyan-800 hover:bg-cyan-50 disabled:opacity-50"
+              disabled={savingOffering || !classes.length}
+              type="submit"
+            >
+              {savingOffering ? 'Memperbarui...' : 'Perbarui Offering'}
+            </button>
+            {(offeringError || offeringNotice) && (
+              <p
+                aria-live="polite"
+                className={`rounded-lg px-3 py-2 text-sm sm:col-span-2 lg:col-span-4 ${
+                  offeringError
+                    ? 'bg-red-50 text-red-700'
+                    : 'bg-emerald-50 text-emerald-700'
+                }`}
+              >
+                {offeringError || offeringNotice}
+              </p>
+            )}
+            {!classes.length && !dataError && (
+              <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-4">
+                Belum ada kelas yang dapat diperbarui.
+              </p>
+            )}
+          </form>
+        </>
+      )}
+    </section>
+  );
 }

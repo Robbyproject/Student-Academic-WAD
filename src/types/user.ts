@@ -5,4 +5,5 @@ export type UserProfile = {
   email: string;
   noTelepon: string;
   jenisKelamin: 'Laki-laki' | 'Perempuan';
+  mahasiswaId?: number;
 };

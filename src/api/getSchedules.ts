@@ -1,3 +1,5 @@
+import { studentRequest, unwrapList } from './student';
+
 export interface Schedule {
     id: string;
     hari: string;
@@ -10,14 +12,7 @@ export interface Schedule {
     nama_dosen: string;
 }
 
-export async function getSchedules(): Promise<Schedule[]> {
-    const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/schedules`
-    );
-
-    if (!response.ok) {
-        throw new Error("Gagal mengambil jadwal");
-    }
-
-    return response.json();
+export async function getSchedules(token: string | null): Promise<Schedule[]> {
+    const payload = await studentRequest<unknown>('/schedules', token);
+    return unwrapList<Schedule>(payload, 'schedules', 'jadwal');
 }

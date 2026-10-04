@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import type { UserProfile } from '../types/user';
+import type { ActivePage } from '../App';
 
 type NavbarProps = {
   user: UserProfile;
-  activePage: 'dashboard' | 'profile';
-  onNavigate: (page: 'dashboard' | 'profile') => void;
+  activePage: ActivePage;
+  onNavigate: (page: ActivePage) => void;
   onLogout: () => void;
 };
 

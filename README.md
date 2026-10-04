@@ -9,6 +9,51 @@ each value can be a relative path or a complete URL. The login response should
 include the account role (`mahasiswa`, `dosen`, or `admin`/`staff`) and may include
 a bearer token and user profile fields.
 
+## Admin KRS API
+
+The admin dashboard sends the Sanctum bearer token returned by login with KRS
+and academic-management requests. `VITE_API_URL` should include the API prefix
+(for example, `http://localhost:8000/api`).
+
+The KRS setup screen uses these admin routes:
+
+- `GET /admin/academic-data` to load departments, lecturers, and courses.
+- `POST /admin/matkul` to create a course with `kode_matkul`, `nama_matkul`,
+  `sks`, and `jurusan_id`. The admin form reloads `/admin/academic-data` after
+  successful creation to refresh the course lists.
+- `GET /admin/krs/periods` and `POST /admin/krs/periods` to list and create
+  academic periods. Period creation sends `academic_year_start`, `term`
+  (`ganjil` or `genap`), `is_active`, and `registration_open`.
+- `PATCH /admin/krs/periods/{id}` to open or close KRS registration by sending
+  `{"registration_open": true}` or `{"registration_open": false}`.
+- `GET /admin/krs/packages`, `POST /admin/krs/packages`, and
+  `PUT /admin/krs/packages/{id}` to list, create, and replace department
+  semester packages. Create/update sends `jurusan_id`, `semester` (1–8),
+  `name`, and `matkul_ids`.
+- `POST /admin/academic-classes` to create class offerings. The payload includes
+  `tahun_ajaran` in `YYYY/YYYY` format and `term` (`ganjil` or `genap`) along
+  with course, lecturer, class, and schedule fields.
+- `PATCH /admin/academic-classes/{id}/offering` to assign or correct an
+  existing class offering's `tahun_ajaran` and `term`.
+
+The admin dashboard requires a valid admin-role bearer token for these routes.
+
+## Student Academic Routes
+
+The student sidebar uses the authenticated student's Sanctum bearer token for
+these routes:
+
+- `GET /krs/options` to load the student's required semester package and the
+  class sections available for each required course.
+- `GET /krs` to show the current KRS selection.
+- `PUT /krs` to submit or replace the selection using
+  `{"kelas_ids": [12, 18]}`. The frontend requires one selected class section
+  for each course in the required package before submitting.
+- `GET /tasks/{mahasiswaId}` to show assignments and deadlines. The login
+  response must include `mahasiswa.id` or `mahasiswa_id` so the frontend can
+  call this endpoint without a hard-coded student ID.
+- `GET /schedules` to show the student's class schedule.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

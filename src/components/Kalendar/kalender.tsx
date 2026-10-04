@@ -61,7 +61,7 @@ function CalendarOffIcon({ className }: IconProps) {
     );
 }
 
-function CalendarSchedule() {
+function CalendarSchedule({ token }: { token: string | null }) {
     const [schedules, setSchedules] = useState<Schedule[]>([]);
     const [selectedDate, setSelectedDate] = useState<number>(
         new Date().getDate()
@@ -70,7 +70,7 @@ function CalendarSchedule() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        getSchedules()
+        const timeoutId = window.setTimeout(() => getSchedules(token)
             .then((data) => {
                 setSchedules(data);
             })
@@ -79,8 +79,9 @@ function CalendarSchedule() {
             })
             .finally(() => {
                 setLoading(false);
-            });
-    }, []);
+            }), 0);
+        return () => window.clearTimeout(timeoutId);
+    }, [token]);
 
     /*
      * Membuat data 7 hari berdasarkan minggu sekarang

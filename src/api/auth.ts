@@ -78,9 +78,13 @@ export async function login(credentials: LoginCredentials): Promise<AuthSession>
 
   const data = asRecord(body.data);
   const account = asRecord(data.user ?? body.user ?? data.profile ?? body.profile ?? data);
+  const mahasiswa = asRecord(account.mahasiswa);
   const role = normalizeRole(account.role ?? account.user_role ?? data.role ?? body.role);
   const token = text(body.token, body.access_token, data.token, data.access_token);
   const gender = text(account.jenis_kelamin, account.gender);
+  const mahasiswaId = Number(
+    mahasiswa.id ?? account.mahasiswa_id ?? account.mahasiswaId ?? account.id_mahasiswa
+  );
 
   return {
     token: token || null,
@@ -92,6 +96,7 @@ export async function login(credentials: LoginCredentials): Promise<AuthSession>
       email: text(account.email) || credentials.email,
       noTelepon: text(account.noTelepon, account.no_telepon, account.phone),
       jenisKelamin: gender.toLowerCase().startsWith('perempuan') ? 'Perempuan' : 'Laki-laki',
+      ...(Number.isInteger(mahasiswaId) && mahasiswaId > 0 ? { mahasiswaId } : {}),
     },
   };
 }

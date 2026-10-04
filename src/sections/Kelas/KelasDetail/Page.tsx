@@ -45,14 +45,14 @@ export default function KelasDetail({ course, onBack }: KelasDetailProps) {
 
 			<section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
 				<div className="bg-cyan-600 px-5 py-6 text-white sm:px-7">
-					<p className="text-xs font-medium text-cyan-100">Kelas: {course.code}</p>
-					<h1 className="mt-1 max-w-3xl break-words text-xl font-bold sm:text-2xl">{course.name}</h1>
+					<p className="text-xs font-medium text-cyan-100">Kelas: {course.kode_matkul}</p>
+					<h1 className="mt-1 max-w-3xl break-words text-xl font-bold sm:text-2xl">{course.nama_matkul}</h1>
 				</div>
 				<div className="grid gap-5 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4 sm:px-7">
-					<DetailRow label="Kode Kelas" value={`2026/1/${course.code}`} />
-					<DetailRow label="Dosen Pengajar" value={`-- ${course.lecturer}`} />
+					<DetailRow label="Kode Kelas" value={`2026/1/${course.kode_matkul}`} />
+					<DetailRow label="Dosen Pengajar" value={`-- ${course.nama_dosen}`} />
 					<DetailRow label="Jumlah Mahasiswa" value="49 Mahasiswa" />
-					<DetailRow label="Periode Akademik" value={course.semester.toUpperCase()} />
+					<DetailRow label="Periode Akademik" value={course.tahun_ajaran.toUpperCase()} />
 				</div>
 			</section>
 
@@ -89,7 +89,7 @@ export default function KelasDetail({ course, onBack }: KelasDetailProps) {
 						</button>
 						<div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
 							<div className="min-h-0 overflow-hidden">
-								<div className="grid gap-4 border-t border-slate-200 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4"><DetailRow label="Jadwal" value={meeting.schedule} /><DetailRow label="Dosen Pengajar" value={`-- ${course.lecturer}`} /><DetailRow label="Materi" value={course.name} /><DetailRow label="Tugas" value={meeting.status === 'Selesai' ? 'Tersedia' : 'Belum tersedia'} /></div>
+								<div className="grid gap-4 border-t border-slate-200 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4"><DetailRow label="Jadwal" value={meeting.schedule} /><DetailRow label="Dosen Pengajar" value={`-- ${course.nama_dosen}`} /><DetailRow label="Materi" value={course.nama_matkul} /><DetailRow label="Tugas" value={meeting.status === 'Selesai' ? 'Tersedia' : 'Belum tersedia'} /></div>
 								<div className="flex flex-wrap gap-2 border-t border-dashed border-slate-200 px-5 py-3"><button className="inline-flex items-center gap-2 rounded-md bg-cyan-600 px-3 py-2 text-xs font-medium text-white hover:bg-cyan-700" type="button"><CalendarIcon /> Lihat Jadwal</button><button className="inline-flex items-center gap-2 rounded-md border border-cyan-600 px-3 py-2 text-xs font-medium text-cyan-700 hover:bg-cyan-50" type="button"><BookIcon /> Buka Materi</button></div>
 							</div>
 						</div>

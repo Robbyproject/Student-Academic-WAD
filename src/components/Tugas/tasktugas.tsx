@@ -51,25 +51,44 @@ function NotePencilIcon() {
     );
 }
 
-function TaskTugas() {
+function TaskTugas({
+    mahasiswaId,
+    token,
+}: {
+    mahasiswaId?: number;
+    token: string | null;
+}) {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
     useEffect(() => {
-        // ID mahasiswa Arya di tabel mahasiswa
-        const mahasiswaId = 1;
-
-        getTasks(mahasiswaId)
-            .then((data) => {
-                setTasks(data);
-            })
-            .catch((error) => {
-                console.error("Gagal mengambil data tugas:", error);
-            })
-            .finally(() => {
+        const timeoutId = window.setTimeout(() => {
+            if (!mahasiswaId) {
+                setError("ID mahasiswa tidak ditemukan pada data login.");
                 setLoading(false);
-            });
-    }, []);
+                return;
+            }
+
+            getTasks(mahasiswaId, token)
+                .then((data) => {
+                    setTasks(data);
+                    setError("");
+                })
+                .catch((requestError: unknown) => {
+                    console.error("Gagal mengambil data tugas:", requestError);
+                    setError(
+                        requestError instanceof Error
+                            ? requestError.message
+                            : "Gagal mengambil data tugas."
+                    );
+                })
+                .finally(() => {
+                    setLoading(false);
+                });
+        }, 0);
+        return () => window.clearTimeout(timeoutId);
+    }, [mahasiswaId, token]);
 
     /* ---------- Filter tugas yang masih aktif ---------- */
 
@@ -106,6 +125,10 @@ function TaskTugas() {
                             Memuat tugas...
                         </p>
                     </div>
+                ) : error ? (
+                    <p aria-live="polite" className="py-6 text-center text-xs text-red-600">
+                        {error}
+                    </p>
                 ) : activeTasks.length > 0 ? (
                     <div className="space-y-3">
                         {activeTasks.map((task) => {

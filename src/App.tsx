@@ -20,12 +20,24 @@ const KelasDetail = lazy(() =>
 );
 const LecturerDashboard = lazy(() => import('./pages/dosen/Dashboard'));
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
+const CoursesPage = lazy(() => import('./pages/student/CoursesPage'));
+const TasksPage = lazy(() => import('./pages/student/TasksPage'));
+const SchedulePage = lazy(() => import('./pages/student/SchedulePage'));
 
-export type ActivePage = 'dashboard' | 'profile';
+export type ActivePage =
+  | 'dashboard'
+  | 'profile'
+  | 'courses'
+  | 'tasks'
+  | 'schedule';
 
 function getStoredPage(): ActivePage {
-  return sessionStorage.getItem('academic-active-page') === 'profile'
-    ? 'profile'
+  const page = sessionStorage.getItem('academic-active-page');
+  return page === 'profile' ||
+    page === 'courses' ||
+    page === 'tasks' ||
+    page === 'schedule'
+    ? page
     : 'dashboard';
 }
 
@@ -109,7 +121,15 @@ function DetailSkeleton() {
   );
 }
 
-function StudentPortal({ user, onLogout }: { user: UserProfile; onLogout: () => void }) {
+function StudentPortal({
+  user,
+  token,
+  onLogout,
+}: {
+  user: UserProfile;
+  token: string | null;
+  onLogout: () => void;
+}) {
   const [activePage, setActivePage] =
     useState<ActivePage>(getStoredPage);
 
@@ -173,10 +193,7 @@ function StudentPortal({ user, onLogout }: { user: UserProfile; onLogout: () => 
 
   function handleNavigate(page: ActivePage) {
     setActivePage(page);
-
-    if (page === 'dashboard') {
-      setSelectedCourse(null);
-    }
+    setSelectedCourse(null);
   }
 
   return (
@@ -210,6 +227,12 @@ function StudentPortal({ user, onLogout }: { user: UserProfile; onLogout: () => 
             >
               {activePage === 'profile' ? (
                 <DataDiri initialData={user} />
+              ) : activePage === 'courses' ? (
+                <CoursesPage token={token} />
+              ) : activePage === 'tasks' ? (
+                <TasksPage user={user} token={token} />
+              ) : activePage === 'schedule' ? (
+                <SchedulePage token={token} />
               ) : selectedCourse ? (
                 <KelasDetail
                   course={selectedCourse}
@@ -217,7 +240,7 @@ function StudentPortal({ user, onLogout }: { user: UserProfile; onLogout: () => 
                 />
               ) : (
                 <div className="grid min-w-0 gap-5">
-                  <Dashboard user={user} />
+                  <Dashboard user={user} token={token} />
 
                   <Kelas
                     onCourseSelect={setSelectedCourse}
@@ -268,11 +291,19 @@ export function App() {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-slate-500">Memuat dashboard...</div>}>
       {session.role === 'mahasiswa' ? (
-        <StudentPortal user={session.user} onLogout={handleLogout} />
+        <StudentPortal
+          user={session.user}
+          token={session.token}
+          onLogout={handleLogout}
+        />
       ) : session.role === 'dosen' ? (
         <LecturerDashboard user={session.user} onLogout={handleLogout} />
       ) : (
-        <AdminDashboard user={session.user} onLogout={handleLogout} />
+        <AdminDashboard
+          user={session.user}
+          token={session.token}
+          onLogout={handleLogout}
+        />
       )}
     </Suspense>
   );

@@ -28,6 +28,9 @@ function CalendarIcon() {
 const menuItems = [
   { label: 'Beranda', page: 'dashboard' as const, icon: GridIcon },
   { label: 'Data Diri', page: 'profile' as const, icon: UserIcon },
+  { label: 'Mata Kuliah', page: 'courses' as const, icon: BookIcon },
+  { label: 'Tugas & Deadline', page: 'tasks' as const, icon: ClipboardIcon },
+  { label: 'Jadwal Kuliah', page: 'schedule' as const, icon: CalendarIcon },
 ];
 
 export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
@@ -35,8 +38,8 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
     <aside className="flex h-full min-w-0 flex-col overflow-hidden border-r border-slate-200 bg-white p-3 shadow-sm lg:p-4">
         <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Menu Utama</p>
         <nav aria-label="Navigasi utama" className="space-y-1">
-          {menuItems.map(({ label, page, icon: Icon }) => (
-            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${activePage === page ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`} key={page} onClick={() => onNavigate(page)} type="button">
+          {menuItems.slice(0, 2).map(({ label, page, icon: Icon }) => (
+            <button aria-current={activePage === page ? 'page' : undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${activePage === page ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`} key={page} onClick={() => onNavigate(page)} type="button">
               <Icon />
               <span>{label}</span>
             </button>
@@ -45,11 +48,20 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
 
         <div className="my-4 h-px bg-slate-100" />
         <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Akademik</p>
-        <div className="space-y-1 text-sm text-slate-500">
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2.5"><BookIcon /><span>Mata Kuliah</span></div>
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2.5"><ClipboardIcon /><span>Tugas & Deadline</span></div>
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2.5"><CalendarIcon /><span>Jadwal Kuliah</span></div>
-        </div>
+        <nav aria-label="Menu akademik" className="space-y-1">
+          {menuItems.slice(2).map(({ label, page, icon: Icon }) => (
+            <button
+              aria-current={activePage === page ? 'page' : undefined}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${activePage === page ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+              key={page}
+              onClick={() => onNavigate(page)}
+              type="button"
+            >
+              <Icon />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
       <div className="mt-4 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-cyan-50 p-4">
         <p className="text-xs font-semibold text-indigo-800">Ruang Akademik</p>
         <p className="mt-1 text-[11px] leading-5 text-slate-500">Kelola kelas, tugas, jadwal, dan data akademik dari satu tempat.</p>
