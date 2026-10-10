@@ -13,6 +13,12 @@ type LoginCredentials = {
   password: string;
 };
 
+export type ChangePasswordPayload = {
+  current_password: string;
+  new_password: string;
+  new_password_confirmation: string;
+};
+
 const apiUrl = import.meta.env.VITE_API_URL || '';
 
 function endpoint(configuredEndpoint: string | undefined, fallback: string) {
@@ -116,4 +122,32 @@ export async function logout(token: string | null) {
   if (!response.ok) {
     throw new Error(`Logout API gagal (${response.status}).`);
   }
+}
+
+export async function changePassword(
+  payload: ChangePasswordPayload,
+  token: string | null
+): Promise<{ message: string }> {
+  const response = await fetch(
+    endpoint(import.meta.env.VITE_AUTH_CHANGE_PASSWORD_ENDPOINT, 'change-password'),
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  const body = asRecord(await response.json().catch(() => ({})));
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(body, response.status));
+  }
+
+  return {
+    message: text(body.message) || 'Kata sandi berhasil diperbarui!',
+  };
 }
