@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { UserProfile } from '../types/user';
 import type { ActivePage } from '../App';
-import ChangePasswordForm from './Auth/ChangePasswordForm'; // Sesuaikan path jika nama filenya berbeda
+import ChangePasswordForm from './Auth/ChangePasswordForm'; // Sesuaikan path jika nama filenya beda
 
 type NavbarProps = {
   user: UserProfile;

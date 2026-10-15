@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { studentRequest, unwrapList } from '../../api/student';
+import { studentRequest, unwrapList, unwrapRecord } from '../../api/student';
 
 type Schedule = {
   id: number | string;
+  kelas_id: number;
   hari: string;
   jam_mulai: string;
   jam_selesai: string;
@@ -27,6 +28,35 @@ const DAYS = [
   'Minggu',
 ];
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function classIdsFromKrs(payload: unknown): Set<number> {
+  const data = unwrapRecord(payload);
+  const krs = record(data.krs);
+  const ids = data.kelas_ids ?? krs.kelas_ids;
+
+  if (Array.isArray(ids)) {
+    return new Set(
+      ids
+        .map((item) => Number(record(item).id ?? record(item).kelas_id ?? item))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    );
+  }
+
+  const classes = data.kelas ?? krs.kelas ?? data.classes ?? krs.classes;
+  if (!Array.isArray(classes)) return new Set();
+
+  return new Set(
+    classes
+      .map((item) => Number(record(item).id ?? record(item).kelas_id ?? item))
+      .filter((id) => Number.isInteger(id) && id > 0)
+  );
+}
+
 export default function SchedulePage({ token }: SchedulePageProps) {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +66,11 @@ export default function SchedulePage({ token }: SchedulePageProps) {
     setLoading(true);
     setError('');
     try {
-      const payload = await studentRequest<unknown>('/schedules', token);
+      const [payload, krsPayload] = await Promise.all([
+        studentRequest<unknown>('/schedules', token),
+        studentRequest<unknown>('/krs', token),
+      ]);
+      const selectedClassIds = classIdsFromKrs(krsPayload);
       setSchedules(
         unwrapList<Schedule>(payload, 'schedules', 'jadwal').map(
           (schedule, index) => ({
@@ -51,7 +85,7 @@ export default function SchedulePage({ token }: SchedulePageProps) {
             nama_matkul: schedule.nama_matkul ?? '',
             nama_dosen: schedule.nama_dosen ?? '',
           })
-        )
+        ).filter((schedule) => selectedClassIds.has(Number(schedule.kelas_id)))
       );
     } catch (loadError) {
       console.error('Gagal memuat jadwal kuliah:', loadError);
@@ -91,7 +125,8 @@ export default function SchedulePage({ token }: SchedulePageProps) {
             Jadwal Kuliah
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Jadwal kelas, waktu perkuliahan, ruangan, dan dosen pengampu.
+            Jadwal kelas yang terdaftar pada KRS Anda, termasuk waktu, ruangan,
+            dan dosen pengampu.
           </p>
         </div>
         <button
