@@ -1,24 +1,321 @@
-import { useState, type FormEvent } from 'react';
+import React, { useState, useEffect, type FormEvent } from 'react';
+
+interface Task {
+  id: number;
+  judul: string;
+  deskripsi: string;
+  deadline: string;
+  file_attachment_path?: string;
+  created_at?: string;
+}
 
 export default function TaskUploadPanel() {
   const [title, setTitle] = useState('');
-  const [fileName, setFileName] = useState('');
-  const [notice, setNotice] = useState('');
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const [description, setDescription] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // State untuk Custom Modal Hapus
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+
+  const getToken = () => {
+    let token: string | null = null;
+    const sessionData = sessionStorage.getItem('academic-auth-session') || localStorage.getItem('academic-auth-session');
+    if (sessionData) {
+      try {
+        const parsed = JSON.parse(sessionData);
+        token = parsed.token || null;
+      } catch (e) {
+        token = null;
+      }
+    }
+    if (!token) {
+      token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    }
+    return token;
+  };
+
+  const fetchTasks = async () => {
+    try {
+      const token = getToken();
+      const response = await fetch('http://127.0.0.1:8000/api/tasks', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTasks(Array.isArray(data) ? data : data.data || []);
+      }
+    } catch (error) {
+      console.error('Gagal memuat riwayat tugas', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setNotice(`Tugas "${title}" siap dipublikasikan${fileName ? ` dengan lampiran ${fileName}` : ''}.`);
-    setTitle('');
-    setFileName('');
-  }
+    setMessage(null);
+
+    if (!title) {
+      setMessage({ text: 'Nama tugas wajib diisi!', type: 'error' });
+      return;
+    }
+
+    setLoading(true);
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('judul', title);
+    formData.append('deskripsi', description || '-');
+    if (deadline) formData.append('deadline', deadline);
+    if (file) formData.append('file', file);
+
+    let url = 'http://127.0.0.1:8000/api/tasks';
+    if (editingId) {
+      url = `http://127.0.0.1:8000/api/tasks/${editingId}`;
+      formData.append('_method', 'PUT');
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Gagal menyimpan tugas.');
+
+      setMessage({ 
+        text: editingId ? `Tugas berhasil diperbarui!` : `Tugas "${title}" berhasil dipublikasikan!`, 
+        type: 'success' 
+      });
+
+      setTitle('');
+      setDescription('');
+      setDeadline('');
+      setFile(null);
+      setEditingId(null);
+      const fileInput = document.getElementById('task-file-input') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+
+      fetchTasks();
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Terjadi kesalahan pada server.', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (task: Task) => {
+    setEditingId(task.id);
+    setTitle(task.judul);
+    setDescription(task.deskripsi || '');
+    setDeadline(task.deadline ? task.deadline.slice(0, 16) : '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Memicu modal konfirmasi hapus
+  const confirmDelete = (task: Task) => {
+    setTaskToDelete(task);
+    setShowDeleteModal(true);
+  };
+
+  // Eksekusi hapus setelah dikonfirmasi di modal
+  const executeDelete = async () => {
+    if (!taskToDelete) return;
+
+    try {
+      const token = getToken();
+      const response = await fetch(`http://127.0.0.1:8000/api/tasks/${taskToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error('Gagal menghapus tugas.');
+
+      setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskToDelete.id));
+      setMessage({ text: `Tugas "${taskToDelete.judul}" berhasil dihapus.`, type: 'success' });
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Terjadi kesalahan saat menghapus.', type: 'error' });
+    } finally {
+      setShowDeleteModal(false);
+      setTaskToDelete(null);
+    }
+  };
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Materi kelas</p><h2 className="mt-1 text-lg font-semibold text-slate-900">Unggah tugas</h2>
-      <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end" onSubmit={handleSubmit}>
-        <label className="text-sm font-medium text-slate-700">Nama tugas<input className="mt-2 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-emerald-600" onChange={(event) => setTitle(event.target.value)} placeholder="Contoh: Praktikum 1" required value={title} /></label>
-        <label className="text-sm font-medium text-slate-700">Lampiran<input className="mt-2 block h-10 w-full rounded-lg border border-slate-300 text-xs text-slate-600 file:mr-3 file:h-full file:border-0 file:bg-slate-100 file:px-3" onChange={(event) => setFileName(event.target.files?.[0]?.name ?? '')} type="file" /></label>
-        <button className="h-10 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800" type="submit">Simpan tugas</button>
-      </form>
-      {notice && <p aria-live="polite" className="mt-3 text-sm text-emerald-700">{notice} (pratinjau lokal)</p>}
-    </section>
+    <div className="space-y-6 relative">
+      {/* Form Section */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Materi Kelas</p>
+        <h2 className="text-lg font-bold text-slate-800 mb-4">
+          {editingId ? 'Edit Tugas Kelas' : 'Unggah Tugas'}
+        </h2>
+
+        {message && (
+          <div className={`p-3 rounded-lg text-sm mb-4 font-medium ${
+            message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+          }`}>
+            {message.text}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-4 grid gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Nama tugas</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Contoh: Praktikum 1"
+                required
+                className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Deadline / Tenggat Waktu</label>
+              <input
+                type="datetime-local"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-600 text-slate-600"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Deskripsi Tugas</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Tuliskan instruksi atau detail tugas di sini..."
+              rows={3}
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-600 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Lampiran File Baru (Opsional)</label>
+            <input
+              id="task-file-input"
+              type="file"
+              onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
+              className="w-full h-10 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            {editingId && (
+              <button
+                type="button"
+                onClick={() => { setEditingId(null); setTitle(''); setDescription(''); setDeadline(''); }}
+                className="h-10 rounded-lg bg-slate-200 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-300 transition-colors"
+              >
+                Batal
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="h-10 rounded-lg bg-emerald-700 px-5 text-sm font-semibold text-white hover:bg-emerald-800 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {loading ? 'Menyimpan...' : editingId ? 'Perbarui Tugas' : 'Simpan tugas'}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      {/* History / Daftar Tugas Section */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-md font-bold text-slate-800 mb-4">Riwayat Tugas yang Diunggah</h3>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 text-xs text-slate-500 uppercase">
+                <th className="py-3 px-3">Judul Tugas</th>
+                <th className="py-3 px-3">Deskripsi</th>
+                <th className="py-3 px-3">Deadline</th>
+                <th className="py-3 px-3 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+              {tasks.length > 0 ? (
+                tasks.map((task) => (
+                  <tr key={task.id} className="hover:bg-slate-50">
+                    <td className="py-3 px-3 font-medium text-slate-900">{task.judul}</td>
+                    <td className="py-3 px-3 truncate max-w-xs text-slate-600">{task.deskripsi || '-'}</td>
+                    <td className="py-3 px-3 text-slate-600">{task.deadline ? new Date(task.deadline).toLocaleString('id-ID') : 'Tanpa Deadline'}</td>
+                    <td className="py-3 px-3 text-center space-x-2">
+                      <button
+                        onClick={() => handleEdit(task)}
+                        className="px-3 py-1 bg-amber-50 text-amber-600 rounded-md text-xs font-semibold border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => confirmDelete(task)}
+                        className="px-3 py-1 bg-red-50 text-red-600 rounded-md text-xs font-semibold border border-red-200 hover:bg-red-100 transition-colors cursor-pointer"
+                      >
+                        Hapus
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-slate-400 text-sm">
+                    Belum ada riwayat tugas yang diunggah.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Custom Modal Konfirmasi Hapus */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-100 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-red-50 text-red-600">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-center text-slate-800 mb-2">Hapus Tugas Ini?</h3>
+            <p className="text-sm text-center text-slate-500 mb-6">
+              Apakah kamu yakin ingin menghapus tugas <span className="font-semibold text-slate-700">"{taskToDelete?.judul}"</span>? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={executeDelete}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-700 transition-colors cursor-pointer shadow-sm"
+              >
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
