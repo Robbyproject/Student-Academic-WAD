@@ -1,18 +1,44 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { UserProfile } from '../types/user';
 import { changePassword } from '../api/auth';
+import { studentRequest, unwrapRecord } from '../api/student';
 
 type DataDiriProps = {
   initialData: UserProfile;
+  token: string | null;
 };
 
-export const DataDiri: React.FC<DataDiriProps> = ({ initialData }) => {
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getText(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === 'string' || typeof value === 'number'
+    ? String(value)
+    : '';
+}
+
+export const DataDiri: React.FC<DataDiriProps> = ({ initialData, token }) => {
   // Ambil instruksi tab dari sessionStorage yang dikirim oleh Navbar
   const savedTab = (sessionStorage.getItem('profile_tab') as 'data-diri' | 'ubah-sandi') || 'data-diri';
   const [activeTab, setActiveTab] = useState<'data-diri' | 'ubah-sandi'>(savedTab);
 
   // State untuk form Data Diri
   const [formData, setFormData] = useState<UserProfile>(initialData);
+  const [noTelepon, setNoTelepon] = useState(initialData.noTelepon);
+  const [jenisKelamin, setJenisKelamin] = useState<
+    'Laki-laki' | 'Perempuan' | ''
+  >(initialData.jenisKelamin ?? '');
+  const [angkatan, setAngkatan] = useState('');
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<{
+    text: string;
+    type: 'success' | 'error';
+  } | null>(null);
 
   // State untuk form Ubah Kata Sandi
   const [currentPassword, setCurrentPassword] = useState('');
@@ -21,17 +47,100 @@ export const DataDiri: React.FC<DataDiriProps> = ({ initialData }) => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: value,
-    }));
-  };
+  useEffect(() => {
+    let active = true;
+    const loadProfile = async () => {
+      setLoadingProfile(true);
+      setProfileMessage(null);
+      try {
+        const payload = await studentRequest<unknown>(
+          '/mahasiswa/profile',
+          token
+        );
+        const response = unwrapRecord(payload);
+        const profile = unwrapRecord(
+          response.mahasiswa ?? response.profile ?? response
+        );
+        const account = asRecord(profile.user);
+        const department = asRecord(profile.jurusan);
+        const gender = getText(profile, 'jenis_kelamin');
 
-  const handleSubmitDataDiri = (e: React.FormEvent<HTMLFormElement>) => {
+        if (active) {
+          setFormData((current) => ({
+            ...current,
+            nama:
+              getText(profile, 'nama') ||
+              getText(account, 'nama') ||
+              getText(account, 'name') ||
+              current.nama,
+            nim: getText(profile, 'nim') || current.nim,
+            email:
+              getText(profile, 'email') ||
+              getText(account, 'email') ||
+              current.email,
+            prodi:
+              getText(profile, 'prodi') ||
+              getText(profile, 'program_studi') ||
+              getText(profile, 'nama_jurusan') ||
+              getText(department, 'nama_jurusan') ||
+              current.prodi,
+          }));
+          setNoTelepon(getText(profile, 'no_telepon'));
+          setJenisKelamin(
+            gender === 'Laki-laki' || gender === 'Perempuan' ? gender : ''
+          );
+          setAngkatan(getText(profile, 'angkatan'));
+        }
+      } catch (error) {
+        console.error('Gagal memuat profil mahasiswa:', error);
+        if (active) {
+          setProfileMessage({
+            text:
+              error instanceof Error
+                ? error.message
+                : 'Gagal memuat profil mahasiswa.',
+            type: 'error',
+          });
+        }
+      } finally {
+        if (active) setLoadingProfile(false);
+      }
+    };
+    const timeoutId = window.setTimeout(() => void loadProfile(), 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [token]);
+
+  const handleSubmitDataDiri = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    alert('Data berhasil disimpan!');
+    setProfileMessage(null);
+    setSavingProfile(true);
+    try {
+      await studentRequest<unknown>('/mahasiswa/profile', token, {
+        method: 'PUT',
+        body: JSON.stringify({
+          no_telepon: noTelepon.trim(),
+          jenis_kelamin: jenisKelamin,
+        }),
+      });
+      setProfileMessage({
+        text: 'Data diri berhasil disimpan.',
+        type: 'success',
+      });
+    } catch (error) {
+      console.error('Gagal menyimpan profil mahasiswa:', error);
+      setProfileMessage({
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Gagal menyimpan data diri.',
+        type: 'error',
+      });
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleSubmitPassword = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -52,7 +161,7 @@ export const DataDiri: React.FC<DataDiriProps> = ({ initialData }) => {
       try {
         const parsed = JSON.parse(sessionData);
         token = parsed.token || null;
-      } catch (e) {
+      } catch {
         token = null;
       }
     }
@@ -74,9 +183,12 @@ export const DataDiri: React.FC<DataDiriProps> = ({ initialData }) => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setMessage({
-        text: err.message || 'Gagal memperbarui kata sandi.',
+        text:
+          err instanceof Error
+            ? err.message
+            : 'Gagal memperbarui kata sandi.',
         type: 'error',
       });
     } finally {
@@ -130,6 +242,19 @@ export const DataDiri: React.FC<DataDiriProps> = ({ initialData }) => {
               </div>
             </div>
 
+            {profileMessage && (
+              <div
+                aria-live="polite"
+                className={`p-3 rounded-xl text-sm mb-4 font-medium ${
+                  profileMessage.type === 'success'
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}
+              >
+                {profileMessage.text}
+              </div>
+            )}
+
             <form onSubmit={handleSubmitDataDiri} className="space-y-4 max-w-lg mx-auto">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -139,7 +264,7 @@ export const DataDiri: React.FC<DataDiriProps> = ({ initialData }) => {
                   type="text"
                   name="nama"
                   value={formData.nama}
-                  onChange={handleChange}
+                  readOnly
                   className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-600"
                 />
               </div>
@@ -152,6 +277,30 @@ export const DataDiri: React.FC<DataDiriProps> = ({ initialData }) => {
                   value={formData.nim}
                   disabled
                   className="w-full px-3 py-2 bg-slate-100 border border-gray-200 rounded-lg text-sm text-gray-500 cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Jurusan
+                </label>
+                <input
+                  type="text"
+                  value={formData.prodi}
+                  readOnly
+                  className="w-full px-3 py-2 bg-slate-100 border border-gray-200 rounded-lg text-sm text-gray-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Angkatan
+                </label>
+                <input
+                  type="text"
+                  value={angkatan}
+                  readOnly
+                  className="w-full px-3 py-2 bg-slate-100 border border-gray-200 rounded-lg text-sm text-gray-500"
                 />
               </div>
 
@@ -170,18 +319,15 @@ export const DataDiri: React.FC<DataDiriProps> = ({ initialData }) => {
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
                   No. Telepon <span className="text-red-500">*</span>
                 </label>
-                <div className="flex">
-                  <span className="inline-flex items-center px-3 bg-slate-100 border border-r-0 border-gray-200 rounded-l-lg text-sm text-gray-600">
-                    +62
-                  </span>
-                  <input
-                    type="text"
-                    name="noTelepon"
-                    value={formData.noTelepon}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-r-lg text-sm focus:outline-none focus:border-indigo-600"
-                  />
-                </div>
+                <input
+                  type="tel"
+                  name="noTelepon"
+                  value={noTelepon}
+                  onChange={(event) => setNoTelepon(event.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-600"
+                  placeholder="08xxxxxxxxxx"
+                />
               </div>
 
               <div>
@@ -194,8 +340,9 @@ export const DataDiri: React.FC<DataDiriProps> = ({ initialData }) => {
                       type="radio"
                       name="jenisKelamin"
                       value="Laki-laki"
-                      checked={formData.jenisKelamin === 'Laki-laki'}
-                      onChange={handleChange}
+                      checked={jenisKelamin === 'Laki-laki'}
+                      onChange={() => setJenisKelamin('Laki-laki')}
+                      required
                       className="text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
                     <span>Laki-laki</span>
@@ -205,8 +352,8 @@ export const DataDiri: React.FC<DataDiriProps> = ({ initialData }) => {
                       type="radio"
                       name="jenisKelamin"
                       value="Perempuan"
-                      checked={formData.jenisKelamin === 'Perempuan'}
-                      onChange={handleChange}
+                      checked={jenisKelamin === 'Perempuan'}
+                      onChange={() => setJenisKelamin('Perempuan')}
                       className="text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
                     <span>Perempuan</span>
@@ -216,9 +363,14 @@ export const DataDiri: React.FC<DataDiriProps> = ({ initialData }) => {
 
               <button
                 type="submit"
-                className="w-full mt-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors shadow-sm cursor-pointer select-none"
+                disabled={loadingProfile || savingProfile}
+                className="w-full mt-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors shadow-sm disabled:opacity-50 cursor-pointer select-none"
               >
-                Simpan Perubahan
+                {loadingProfile
+                  ? 'Memuat profil...'
+                  : savingProfile
+                    ? 'Menyimpan...'
+                    : 'Simpan Perubahan'}
               </button>
             </form>
           </div>

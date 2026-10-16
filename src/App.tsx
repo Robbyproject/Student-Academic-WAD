@@ -226,7 +226,7 @@ function StudentPortal({
               }
             >
               {activePage === 'profile' ? (
-                <DataDiri initialData={user} />
+                <DataDiri initialData={user} token={token} />
               ) : activePage === 'courses' ? (
                 <CoursesPage token={token} />
               ) : activePage === 'tasks' ? (
