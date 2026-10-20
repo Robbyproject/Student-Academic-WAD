@@ -8,6 +8,7 @@ export interface Task {
     kode_matkul: string;
     nama_matkul: string;
     nama_dosen: string;
+    file_attachment_path?: string | null;
 }
 
 export async function getTasks(

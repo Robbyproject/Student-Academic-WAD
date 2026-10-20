@@ -1,4 +1,4 @@
-import React, { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 
 interface Task {
   id: number;
@@ -44,7 +44,10 @@ export default function TaskUploadPanel() {
   const fetchTasks = async () => {
     try {
       const token = getToken();
-      const response = await fetch('http://127.0.0.1:8000/api/tasks', {
+      // Mengambil URL dari environment VITE_API_URL, dengan fallback ke Herd
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://backend-student-academic.test/api';
+      
+      const response = await fetch(`${apiUrl}/tasks`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
