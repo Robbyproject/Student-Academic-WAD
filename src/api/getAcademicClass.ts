@@ -1,4 +1,3 @@
-
 export interface AcademicClass {
     id: string | number;
     nama_kelas: string;
