@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     getAcademicClasses,
     type AcademicClass,
@@ -9,6 +10,8 @@ export type Course = AcademicClass & {
     attendancePresent: number;
     attendanceTotal: number;
 };
+
+const PER_PAGE = 10;
 
 function UserIcon() {
     return (
@@ -58,7 +61,7 @@ function CourseCard({
 }) {
     const attendancePercentage = course.attendanceTotal
         ? Math.round(
-              (course.attendancePresent / course.attendanceTotal) * 100
+              (course.attendancePresent / course.attendanceTotal) * 100,
           )
         : 0;
 
@@ -76,19 +79,18 @@ function CourseCard({
                 <div className="flex items-start gap-1.5">
                     <UserIcon />
                     <span>
-                        {course.nama_dosen
-                            ? `-- ${course.nama_dosen}`
-                            : '-'}
+                        {course.nama_dosen || '-'}
                     </span>
                 </div>
 
                 <div className="flex items-start gap-1.5">
                     <ClockIcon />
-
                     <div className="min-w-0 break-words">
-                        {course.schedules.length ? (
-                            course.schedules.map((schedule) => (
-                                <p key={schedule}>{schedule}</p>
+                        {course.schedules.length > 0 ? (
+                            course.schedules.map((schedule, index) => (
+                                <p key={`${course.id}-${index}`}>
+                                    {schedule}
+                                </p>
                             ))
                         ) : (
                             <span>-</span>
@@ -101,18 +103,15 @@ function CourseCard({
                 <div className="h-2 rounded-full bg-white p-0.5">
                     <div
                         className="h-full rounded-full bg-cyan-400"
-                        style={{
-                            width: `${attendancePercentage}%`,
-                        }}
+                        style={{ width: `${attendancePercentage}%` }}
                     />
                 </div>
 
-                <div className="mt-1 flex justify-between text-[9px] text-slate-500">
+                <div className="mt-1 flex justify-between gap-2 text-[9px] text-slate-500">
                     <span>
                         Kehadiran: {course.attendancePresent} dari{' '}
                         {course.attendanceTotal} sesi
                     </span>
-
                     <span>{attendancePercentage}%</span>
                 </div>
             </div>
@@ -129,54 +128,105 @@ export default function Kelas({
     const [searchTerm, setSearchTerm] = useState('');
     const [semester, setSemester] = useState('2026/2027 Ganjil');
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState('');
+    const [hasMore, setHasMore] = useState(false);
 
-    useEffect(() => {
-        async function fetchClasses() {
-            try {
-                setLoading(true);
+    const nextPageRef = useRef(1);
+    const loadingMoreRef = useRef(false);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-                const data = await getAcademicClasses();
+    async function loadPage(page: number, initial = false) {
+        if (loadingMoreRef.current && !initial) return;
 
-                const formattedData: Course[] = data.map((item) => ({
-                    ...item,
-                    schedules: item.schedules,
-                    attendancePresent: 0,
-                    attendanceTotal: 0,
-                }));
+        loadingMoreRef.current = true;
 
-                setCourses(formattedData);
-            } catch (error) {
-                console.error(error);
-                setError('Gagal mengambil data kelas.');
-            } finally {
-                setLoading(false);
-            }
+        if (initial) {
+            setLoading(true);
+        } else {
+            setLoadingMore(true);
         }
 
-        fetchClasses();
+        setError('');
+
+        try {
+            const result = await getAcademicClasses(page, PER_PAGE);
+
+            const formattedData: Course[] = result.data.map((item) => ({
+                ...item,
+                schedules: item.schedules ?? [],
+                attendancePresent: 0,
+                attendanceTotal: 0,
+            }));
+
+            setCourses((previous) => {
+                if (initial) return formattedData;
+
+                const existingIds = new Set(
+                    previous.map((course) => String(course.id)),
+                );
+
+                return [
+                    ...previous,
+                    ...formattedData.filter(
+                        (course) => !existingIds.has(String(course.id)),
+                    ),
+                ];
+            });
+
+            nextPageRef.current = result.current_page + 1;
+            setHasMore(result.next_page_url !== null);
+        } catch (err) {
+            console.error(err);
+            setError('Gagal mengambil data kelas.');
+        } finally {
+            loadingMoreRef.current = false;
+            setLoading(false);
+            setLoadingMore(false);
+        }
+    }
+
+    useEffect(() => {
+        void loadPage(1, true);
     }, []);
 
-	const filteredCourses = useMemo(() => {
-		const normalizedSearch = searchTerm.trim().toLowerCase();
+    function handleScroll() {
+        const container = scrollContainerRef.current;
 
-		// "2026/2027 Ganjil" -> "2026/2027"
-		const selectedAcademicYear = semester.split(' ')[0];
-		return courses.filter((course) => {
-			const matchesSearch = [
-				course.kode_matkul,
-				course.nama_matkul,
-				course.nama_dosen,
-			].some((value) =>
-				value.toLowerCase().includes(normalizedSearch)
-			);
+        if (!container || loadingMoreRef.current || !hasMore) return;
 
-			const matchesSemester =
-				course.tahun_ajaran === selectedAcademicYear;
+        const distanceToBottom =
+            container.scrollHeight -
+            container.scrollTop -
+            container.clientHeight;
 
-			return matchesSearch && matchesSemester;
-		});
-	}, [courses, searchTerm, semester]);
+        if (distanceToBottom < 150) {
+            void loadPage(nextPageRef.current);
+        }
+    }
+
+    const filteredCourses = useMemo(() => {
+        const normalizedSearch = searchTerm.trim().toLowerCase();
+        const selectedAcademicYear = semester.split(' ')[0];
+
+        return courses.filter((course) => {
+            const matchesSearch = [
+                course.kode_matkul,
+                course.nama_matkul,
+                course.nama_dosen ?? '',
+                course.nama_kelas,
+            ].some((value) =>
+                String(value ?? '')
+                    .toLowerCase()
+                    .includes(normalizedSearch),
+            );
+
+            const matchesSemester =
+                course.tahun_ajaran === selectedAcademicYear;
+
+            return matchesSearch && matchesSemester;
+        });
+    }, [courses, searchTerm, semester]);
 
     return (
         <section className="w-full min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
@@ -185,11 +235,21 @@ export default function Kelas({
                     Kelas Akademik{' '}
                     <span className="ml-1 rounded-full bg-cyan-100 px-1.5 py-0.5 text-[9px] font-medium text-cyan-700">
                         {filteredCourses.length}
+                        {hasMore ? '+' : ''}
                     </span>
                 </h1>
 
                 <button
-                    className="flex items-center gap-1.5 text-[11px] font-medium text-sky-600 transition-colors hover:text-sky-800"
+                    className="flex items-center gap-1.5 text-[11px] font-medium text-sky-600 transition-colors hover:text-sky-800 disabled:opacity-50"
+                    disabled={loading}
+                    onClick={() => {
+                        if (loadingMoreRef.current) return;
+
+                        nextPageRef.current = 1;
+                        setHasMore(false);
+                        setCourses([]);
+                        void loadPage(1, true);
+                    }}
                     type="button"
                 >
                     <svg
@@ -206,16 +266,13 @@ export default function Kelas({
                             strokeWidth="1.5"
                         />
                     </svg>
-
-                    Perbarui Data Kehadiran
+                    Muat Ulang Data
                 </button>
             </div>
 
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <label className="relative flex-1">
-                    <span className="sr-only">
-                        Cari kelas
-                    </span>
+                    <span className="sr-only">Cari kelas</span>
 
                     <svg
                         aria-hidden="true"
@@ -224,13 +281,7 @@ export default function Kelas({
                         stroke="currentColor"
                         viewBox="0 0 24 24"
                     >
-                        <circle
-                            cx="11"
-                            cy="11"
-                            r="7"
-                            strokeWidth="1.5"
-                        />
-
+                        <circle cx="11" cy="11" r="7" strokeWidth="1.5" />
                         <path
                             d="m20 20-4-4"
                             strokeLinecap="round"
@@ -239,7 +290,7 @@ export default function Kelas({
                     </svg>
 
                     <input
-                        className="h-7 w-full min-w-0 rounded-md border border-slate-200 bg-slate-50 pl-8 pr-3 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                        className="h-8 w-full min-w-0 rounded-md border border-slate-200 bg-slate-50 pl-8 pr-3 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                         onChange={(event) =>
                             setSearchTerm(event.target.value)
                         }
@@ -250,13 +301,13 @@ export default function Kelas({
 
                 <select
                     aria-label="Pilih semester"
-                    className="h-7 max-w-full rounded-md border border-slate-200 bg-white px-3 text-[11px] text-slate-700 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                    onChange={(event) =>
-                        setSemester(event.target.value)
-                    }
+                    className="h-8 max-w-full rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                    onChange={(event) => setSemester(event.target.value)}
                     value={semester}
                 >
-                    <option>2026/2027 Ganjil</option>
+                    <option value="2026/2027 Ganjil">
+                        2026/2027 Ganjil
+                    </option>
                 </select>
             </div>
 
@@ -264,23 +315,67 @@ export default function Kelas({
                 <p className="py-10 text-center text-sm text-slate-500">
                     Memuat kelas...
                 </p>
-            ) : error ? (
-                <p className="py-10 text-center text-sm text-red-500">
-                    {error}
-                </p>
-            ) : filteredCourses.length ? (
-                <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-3">
-                    {filteredCourses.map((course) => (
-                        <CourseCard
-                            course={course}
-                            key={course.id}
-                            onSelect={onCourseSelect}
-                        />
-                    ))}
+            ) : error && courses.length === 0 ? (
+                <div className="py-10 text-center">
+                    <p className="text-sm text-red-500">{error}</p>
+                    <button
+                        className="mt-3 rounded-md border border-slate-200 px-3 py-2 text-xs hover:bg-slate-50"
+                        onClick={() => void loadPage(1, true)}
+                        type="button"
+                    >
+                        Coba lagi
+                    </button>
                 </div>
+            ) : filteredCourses.length > 0 ? (
+                <>
+                    <div
+                        ref={scrollContainerRef}
+                        onScroll={handleScroll}
+                        className="mt-4 max-h-[600px] overflow-y-auto overflow-x-hidden overscroll-contain pr-1"
+                    >
+                        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-3">
+                            {filteredCourses.map((course) => (
+                                <CourseCard
+                                    course={course}
+                                    key={course.id}
+                                    onSelect={onCourseSelect}
+                                />
+                            ))}
+                        </div>
+
+                        {loadingMore && (
+                            <p className="py-4 text-center text-xs text-slate-500">
+                                Memuat kelas berikutnya...
+                            </p>
+                        )}
+
+                        {error && courses.length > 0 && (
+                            <div className="py-4 text-center">
+                                <p className="text-xs text-red-500">
+                                    {error}
+                                </p>
+                                <button
+                                    className="mt-2 text-xs font-medium text-sky-600 hover:text-sky-800"
+                                    onClick={() =>
+                                        void loadPage(nextPageRef.current)
+                                    }
+                                    type="button"
+                                >
+                                    Coba muat lagi
+                                </button>
+                            </div>
+                        )}
+
+                        {!hasMore && (
+                            <p className="py-4 text-center text-xs text-slate-400">
+                                Semua kelas sudah ditampilkan.
+                            </p>
+                        )}
+                    </div>
+                </>
             ) : (
                 <p className="py-10 text-center text-sm text-slate-500">
-                    Kelas tidak ditemukan.
+                    Kelas tidak ditemukan pada data yang sudah dimuat.
                 </p>
             )}
         </section>
