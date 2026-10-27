@@ -129,4 +129,97 @@ export default defineConfig([
 ```
 
 
-test
+## 🚀 API Endpoints
+
+**Base URL:** `https://student-academic-api-ydu4.onrender.com`
+
+---
+
+### 📖 Dokumentasi API Interactive
+Dokumentasi Swagger/Scramble bawaan backend dapat diakses secara langsung melalui browser:
+* **Interactive API Docs:** `GET /docs/api`
+* **OpenAPI Spec (JSON):** `GET /docs/api.json`
+
+---
+
+### 🔐 Authentikasi & Akun (`/api`)
+| Method | Endpoint | Keterangan |
+| :--- | :--- | :--- |
+| `POST` | `/api/login` | Login pengguna (Mahasiswa/Dosen/Admin) |
+| `POST` | `/api/logout` | Logout pengguna |
+| `POST` | `/api/change-password` | Ubah kata sandi akun |
+| `GET`  | `/api/user` | Mengambil data pengguna aktif |
+
+---
+
+### 🎓 Portal Mahasiswa (`/api`)
+| Method | Endpoint | Keterangan |
+| :--- | :--- | :--- |
+| `GET`  | `/api/mahasiswa/profile` | Lihat profil mahasiswa |
+| `PUT`  | `/api/mahasiswa/profile` | Update profil mahasiswa |
+| `GET`  | `/api/krs` | Lihat daftar KRS mahasiswa |
+| `PUT`  | `/api/krs` | Simpan/Update pilihan KRS |
+| `GET`  | `/api/krs/options` | Opsi mata kuliah KRS |
+| `GET`  | `/api/tasks` | Daftar tugas mahasiswa |
+| `GET`  | `/api/tasks/{mahasiswaId}` | Tugas spesifik mahasiswa |
+| `GET`  | `/api/submissions` | Riwayat pengumpulan tugas |
+| `POST` | `/api/submissions` | Mengirim/mengumpulkan tugas |
+
+---
+
+### 👨‍🏫 Portal Dosen (`/api/dosen`)
+| Method | Endpoint | Keterangan |
+| :--- | :--- | :--- |
+| `GET`  | `/api/dosen/departments` | Daftar jurusan diampu dosen |
+| `GET`  | `/api/dosen/classes-by-jurusan/{jurusanId}` | Kelas berdasarkan jurusan |
+| `GET`  | `/api/dosen/tasks` | Daftar tugas yang dibuat dosen |
+| `GET`  | `/api/dosen/tasks/{taskId}/submissions` | Daftar pengumpulan tugas mahasiswa |
+| `GET`  | `/api/dosen/absensi/kelas` | Daftar kelas untuk absensi |
+| `GET`  | `/api/dosen/absensi/kelas/{kelasId}` | Peserta absensi kelas |
+| `POST` | `/api/dosen/absensi/kelas/{kelasId}` | Simpan absensi kelas |
+| `GET`  | `/api/dosen/absensi/kelas/{kelasId}/pertemuan` | Pertemuan absensi kelas |
+
+---
+
+### 🛡️ Admin Management (`/api/admin`)
+| Method | Endpoint | Keterangan |
+| :--- | :--- | :--- |
+| `GET`  | `/api/admin/academic-data` | Ringkasan data akademik |
+| `POST` | `/api/admin/academic-classes` | Tambah kelas akademik baru |
+| `PATCH`| `/api/admin/academic-classes/{classId}/offering` | Update penawaran kelas |
+| `GET`  | `/api/admin/dosen` | Daftar seluruh dosen |
+| `POST` | `/api/admin/dosen` | Tambah dosen baru |
+| `GET`  | `/api/admin/dosen/{dosenId}` | Detail data dosen |
+| `PUT`  | `/api/admin/dosen/{dosenId}` | Update data dosen |
+| `DELETE`| `/api/admin/dosen/{dosenId}` | Hapus dosen |
+| `GET`  | `/api/admin/jurusan` | Daftar jurusan/departemen |
+| `POST` | `/api/admin/jurusan` | Tambah jurusan baru |
+| `PUT`  | `/api/admin/jurusan/{id}` | Update jurusan |
+| `DELETE`| `/api/admin/jurusan/{id}` | Hapus jurusan |
+| `GET`  | `/api/admin/krs/packages` | Paket matkul KRS |
+| `POST` | `/api/admin/krs/packages` | Buat paket KRS |
+| `PUT`  | `/api/admin/krs/packages/{packageId}` | Update paket KRS |
+| `GET`  | `/api/admin/krs/periods` | Periode KRS |
+| `POST` | `/api/admin/krs/periods` | Tambah periode KRS |
+| `PATCH`| `/api/admin/krs/periods/{periodId}` | Update periode KRS |
+| `POST` | `/api/admin/matkul` | Tambah mata kuliah baru |
+| `POST` | `/api/admin/users` | Tambah pengguna mahasiswa/staf baru |
+
+---
+
+### 📚 Kelas & Akademik Umum (`/api`)
+| Method | Endpoint | Keterangan |
+| :--- | :--- | :--- |
+| `GET`  | `/api/academic-classes` | Daftar seluruh kelas akademik |
+| `GET`  | `/api/academic-classes/{id}` | Detail kelas akademik |
+| `GET`  | `/api/academic-classes/by-jurusan/{jurusanId}` | Kelas per jurusan |
+| `GET`  | `/api/academic-classes/lecturers/{matkulId}` | Dosen pengampu matkul |
+| `GET`  | `/api/matkul` | Daftar mata kuliah |
+| `GET`  | `/api/departments` | Daftar departemen |
+| `GET`  | `/api/schedules` | Jadwal perkuliahan |
+| `POST` | `/api/schedules` | Tambah jadwal perkuliahan |
+| `PUT`  | `/api/schedules/{id}` | Update jadwal perkuliahan |
+| `DELETE`| `/api/schedules/{id}` | Hapus jadwal perkuliahan |
+| `GET`  | `/api/classes/participants` | Peserta kelas |
+| `POST` | `/api/classes/participants` | Tambah peserta kelas |
+| `DELETE`| `/api/classes/participants/{id}` | Hapus peserta kelas |
