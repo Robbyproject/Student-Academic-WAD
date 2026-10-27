@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
+import DosenSubmissionList from './DosenSubmissionList';
 
 interface Task {
   id: number;
@@ -7,9 +8,15 @@ interface Task {
   deadline: string;
   file_attachment_path?: string;
   created_at?: string;
+  submissions_count?: number;
 }
 
-export default function TaskUploadPanel() {
+interface TaskUploadPanelProps {
+  token: string | null;
+}
+
+export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelProps) {
+  // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
@@ -20,11 +27,17 @@ export default function TaskUploadPanel() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  // State untuk Custom Modal Hapus
+  // Pagination State untuk Riwayat Tugas
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // State Modal Hapus & Selected Task
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const getToken = () => {
+    if (propToken) return propToken;
     let token: string | null = null;
     const sessionData = sessionStorage.getItem('academic-auth-session') || localStorage.getItem('academic-auth-session');
     if (sessionData) {
@@ -41,14 +54,16 @@ export default function TaskUploadPanel() {
     return token;
   };
 
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://backend-student-academic.test/api';
+
   const fetchTasks = async () => {
     try {
       const token = getToken();
-      // Mengambil URL dari environment VITE_API_URL, dengan fallback ke Herd
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://backend-student-academic.test/api';
-      
       const response = await fetch(`${apiUrl}/tasks`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
       });
       if (response.ok) {
         const data = await response.json();
@@ -62,6 +77,12 @@ export default function TaskUploadPanel() {
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  // Logika Pemotongan Data Pagination untuk Riwayat Tugas
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentTasks = tasks.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(tasks.length / itemsPerPage);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -80,9 +101,9 @@ export default function TaskUploadPanel() {
     if (deadline) formData.append('deadline', deadline);
     if (file) formData.append('file', file);
 
-    let url = 'http://127.0.0.1:8000/api/tasks';
+    let url = `${apiUrl}/tasks`;
     if (editingId) {
-      url = `http://127.0.0.1:8000/api/tasks/${editingId}`;
+      url = `${apiUrl}/tasks/${editingId}`;
       formData.append('_method', 'PUT');
     }
 
@@ -125,19 +146,17 @@ export default function TaskUploadPanel() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Memicu modal konfirmasi hapus
   const confirmDelete = (task: Task) => {
     setTaskToDelete(task);
     setShowDeleteModal(true);
   };
 
-  // Eksekusi hapus setelah dikonfirmasi di modal
   const executeDelete = async () => {
     if (!taskToDelete) return;
 
     try {
       const token = getToken();
-      const response = await fetch(`http://127.0.0.1:8000/api/tasks/${taskToDelete.id}`, {
+      const response = await fetch(`${apiUrl}/tasks/${taskToDelete.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -146,6 +165,10 @@ export default function TaskUploadPanel() {
 
       setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskToDelete.id));
       setMessage({ text: `Tugas "${taskToDelete.judul}" berhasil dihapus.`, type: 'success' });
+      
+      if (selectedTask?.id === taskToDelete.id) {
+        setSelectedTask(null);
+      }
     } catch (err: any) {
       setMessage({ text: err.message || 'Terjadi kesalahan saat menghapus.', type: 'error' });
     } finally {
@@ -238,9 +261,9 @@ export default function TaskUploadPanel() {
         </form>
       </section>
 
-      {/* History / Daftar Tugas Section */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 className="text-md font-bold text-slate-800 mb-4">Riwayat Tugas yang Diunggah</h3>
+      {/* Riwayat Tugas Section dengan Pagination */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+        <h3 className="text-md font-bold text-slate-800">Riwayat Tugas yang Diunggah</h3>
         
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -253,25 +276,36 @@ export default function TaskUploadPanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-              {tasks.length > 0 ? (
-                tasks.map((task) => (
+              {currentTasks.length > 0 ? (
+                currentTasks.map((task) => (
                   <tr key={task.id} className="hover:bg-slate-50">
                     <td className="py-3 px-3 font-medium text-slate-900">{task.judul}</td>
                     <td className="py-3 px-3 truncate max-w-xs text-slate-600">{task.deskripsi || '-'}</td>
                     <td className="py-3 px-3 text-slate-600">{task.deadline ? new Date(task.deadline).toLocaleString('id-ID') : 'Tanpa Deadline'}</td>
-                    <td className="py-3 px-3 text-center space-x-2">
-                      <button
-                        onClick={() => handleEdit(task)}
-                        className="px-3 py-1 bg-amber-50 text-amber-600 rounded-md text-xs font-semibold border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => confirmDelete(task)}
-                        className="px-3 py-1 bg-red-50 text-red-600 rounded-md text-xs font-semibold border border-red-200 hover:bg-red-100 transition-colors cursor-pointer"
-                      >
-                        Hapus
-                      </button>
+                    <td className="py-3 px-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTask(task)}
+                          className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-md text-xs font-semibold border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+                        >
+                          Lihat
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(task)}
+                          className="px-2.5 py-1 bg-amber-50 text-amber-600 rounded-md text-xs font-semibold border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => confirmDelete(task)}
+                          className="px-2.5 py-1 bg-red-50 text-red-600 rounded-md text-xs font-semibold border border-red-200 hover:bg-red-100 transition-colors cursor-pointer"
+                        >
+                          Hapus
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -285,33 +319,64 @@ export default function TaskUploadPanel() {
             </tbody>
           </table>
         </div>
+
+        {/* Kontrol Navigasi Pagination Riwayat Tugas */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
+            <span className="text-slate-500">
+              Halaman {currentPage} dari {totalPages}
+            </span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+              >
+                Sebelumnya
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+              >
+                Selanjutnya
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
-      {/* Custom Modal Konfirmasi Hapus */}
+      {/* Komponen Daftar Pengumpulan Tugas */}
+      {selectedTask && (
+        <DosenSubmissionList 
+          token={getToken()} 
+          selectedTask={selectedTask} 
+          onClose={() => setSelectedTask(null)} 
+        />
+      )}
+
+      {/* Modal Hapus */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-100 animate-in fade-in zoom-in duration-150">
-            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-red-50 text-red-600">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </div>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-100">
             <h3 className="text-lg font-bold text-center text-slate-800 mb-2">Hapus Tugas Ini?</h3>
             <p className="text-sm text-center text-slate-500 mb-6">
-              Apakah kamu yakin ingin menghapus tugas <span className="font-semibold text-slate-700">"{taskToDelete?.judul}"</span>? Tindakan ini tidak dapat dibatalkan.
+              Apakah kamu yakin ingin menghapus tugas <span className="font-semibold text-slate-700">"{taskToDelete?.judul}"</span>?
             </p>
             <div className="flex justify-center gap-3">
               <button
                 type="button"
                 onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
               >
                 Batal
               </button>
               <button
                 type="button"
                 onClick={executeDelete}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-700 transition-colors cursor-pointer shadow-sm"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-700 cursor-pointer"
               >
                 Ya, Hapus
               </button>

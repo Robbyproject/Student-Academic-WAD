@@ -1,7 +1,6 @@
 import type { UserProfile } from '../../types/user';
 import AttendancePanel from './sections/AttendancePanel';
 import TaskUploadPanel from './sections/TaskUploadPanel';
-import DosenSubmissionList from './sections/DosenSubmissionList'; // 1. Import di sini
 
 type LecturerDashboardProps = { user: UserProfile; onLogout: () => void };
 
@@ -18,7 +17,6 @@ export default function LecturerDashboard({ user, onLogout }: LecturerDashboardP
         <div className="grid gap-5">
           <AttendancePanel />
           <TaskUploadPanel />
-          <DosenSubmissionList token={token} />
         </div>
       </div>
     </main>
