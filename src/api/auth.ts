@@ -69,7 +69,7 @@ function getErrorMessage(body: Record<string, unknown>, status: number) {
 
 export async function login(credentials: LoginCredentials): Promise<AuthSession> {
   const response = await fetch(
-    endpoint(import.meta.env.VITE_AUTH_LOGIN_ENDPOINT, 'login'),
+    endpoint(import.meta.env.VITE_AUTH_LOGIN_ENDPOINT, 'api/login'), // ✅ Ditambahkan api/
     {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -109,7 +109,7 @@ export async function login(credentials: LoginCredentials): Promise<AuthSession>
 
 export async function logout(token: string | null) {
   const response = await fetch(
-    endpoint(import.meta.env.VITE_AUTH_LOGOUT_ENDPOINT, 'logout'),
+    endpoint(import.meta.env.VITE_AUTH_LOGOUT_ENDPOINT, 'api/logout'), // ✅ Ditambahkan api/
     {
       method: 'POST',
       headers: {
@@ -129,7 +129,7 @@ export async function changePassword(
   token: string | null
 ): Promise<{ message: string }> {
   const response = await fetch(
-    endpoint(import.meta.env.VITE_AUTH_CHANGE_PASSWORD_ENDPOINT, 'change-password'),
+    endpoint(import.meta.env.VITE_AUTH_CHANGE_PASSWORD_ENDPOINT, 'api/change-password'), // ✅ Ditambahkan api/
     {
       method: 'POST',
       headers: {
