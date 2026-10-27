@@ -133,8 +133,6 @@ function StudentPortal({
   const [activePage, setActivePage] =
     useState<ActivePage>(getStoredPage);
 
-  // Data kelas berasal dari API Laravel,
-  // tidak mengambil lagi dari matkul.json.
   const [selectedCourse, setSelectedCourse] =
     useState<Course | null>(null);
 
@@ -182,7 +180,7 @@ function StudentPortal({
     if (selectedCourse) {
       sessionStorage.setItem(
         'academic-selected-course',
-        selectedCourse.id
+        String(selectedCourse.id)
       );
     } else {
       sessionStorage.removeItem(
