@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { loginApi } from '../api/auth';
+import { login } from '../api/auth'; // Mengimpor fungsi login yang benar dari auth.ts
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -13,16 +13,27 @@ export const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      const res = await loginApi({ email, password });
-      
-      // Simpan Token & Data User di LocalStorage
-      localStorage.setItem('token', res.access_token);
-      localStorage.setItem('user', JSON.stringify(res.user));
+      // Memanggil fungsi login dari auth.ts yang sudah otomatis menangani endpoint & parsing JSON
+      const session = await login({ email, password });
 
-      // Redirect ke Halaman Dashboard
-      window.location.href = '/dashboard';
+      if (!session.token) {
+        throw new Error('Token tidak ditemukan di respons server.');
+      }
+
+      // Simpan token dan user ke localStorage dengan benar
+      localStorage.setItem('token', session.token);
+      localStorage.setItem('user', JSON.stringify(session.user));
+
+      console.log('TOKEN BERHASIL DISIMPAN:', session.token);
+
+      // Beri jeda kecil agar browser sempat menulis localStorage sebelum pindah halaman
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 300);
+
     } catch (err: any) {
-      setError(err.message);
+      console.error('ERROR LOGIN:', err);
+      setError(err.message || 'Terjadi kesalahan saat login.');
     } finally {
       setLoading(false);
     }
