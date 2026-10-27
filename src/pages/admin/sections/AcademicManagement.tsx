@@ -36,6 +36,7 @@ type Props = {
 };
 
 const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? '';
+const JURUSAN_PER_PAGE = 5;
 
 const inputClass =
   'mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-cyan-600 disabled:bg-slate-100 disabled:text-slate-400';
@@ -91,6 +92,29 @@ export default function AcademicManagement({ token }: Props) {
 
   const [loading, setLoading] = useState(true);
   const [dataError, setDataError] = useState('');
+
+  // Pagination daftar jurusan
+  const [jurusanPage, setJurusanPage] = useState(1);
+
+  const jurusanTotalPages = Math.max(
+    1,
+    Math.ceil(departments.length / JURUSAN_PER_PAGE),
+  );
+
+  const paginatedJurusan = useMemo(() => {
+    const startIndex = (jurusanPage - 1) * JURUSAN_PER_PAGE;
+
+    return departments.slice(
+      startIndex,
+      startIndex + JURUSAN_PER_PAGE,
+    );
+  }, [departments, jurusanPage]);
+
+  useEffect(() => {
+    if (jurusanPage > jurusanTotalPages) {
+      setJurusanPage(jurusanTotalPages);
+    }
+  }, [jurusanPage, jurusanTotalPages]);
 
   // Manajemen jurusan
   const [departmentCode, setDepartmentCode] = useState('');
@@ -182,6 +206,10 @@ export default function AcademicManagement({ token }: Props) {
       const nextDepartments = getCollection<Department>(data, 'jurusan');
 
       setDepartments(nextDepartments);
+
+      // Jika jurusan baru ditambahkan, kembali ke halaman pertama.
+      setJurusanPage(1);
+
       setLecturers(getCollection<Lecturer>(data, 'dosen'));
       setCourses(getCollection<Course>(data, 'matkul'));
 
@@ -453,38 +481,110 @@ export default function AcademicManagement({ token }: Props) {
           </h3>
 
           {loading ? (
-            <p className="text-sm text-slate-500">Memuat daftar jurusan...</p>
+            <p className="text-sm text-slate-500">
+              Memuat daftar jurusan...
+            </p>
           ) : departments.length === 0 ? (
             <p className="text-sm text-slate-500">
               Belum ada data jurusan.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-500">
-                    <th className="px-3 py-2 font-medium">Kode</th>
-                    <th className="px-3 py-2 font-medium">Nama Jurusan</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {departments.map((department) => (
-                    <tr
-                      key={department.id}
-                      className="border-b border-slate-100 last:border-0"
-                    >
-                      <td className="px-3 py-3 font-semibold">
-                        {department.kode_jurusan}
-                      </td>
-                      <td className="px-3 py-3">
-                        {department.nama_jurusan}
-                      </td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-500">
+                      <th className="px-3 py-2 font-medium">Kode</th>
+                      <th className="px-3 py-2 font-medium">
+                        Nama Jurusan
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+
+                  <tbody>
+                    {paginatedJurusan.map((department) => (
+                      <tr
+                        key={department.id}
+                        className="border-b border-slate-100 last:border-0"
+                      >
+                        <td className="px-3 py-3 font-semibold">
+                          {department.kode_jurusan}
+                        </td>
+                        <td className="px-3 py-3">
+                          {department.nama_jurusan}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination nomor halaman jurusan */}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                <p className="text-xs text-slate-500">
+                  Menampilkan{' '}
+                  {(jurusanPage - 1) * JURUSAN_PER_PAGE + 1}
+                  {'–'}
+                  {Math.min(
+                    jurusanPage * JURUSAN_PER_PAGE,
+                    departments.length,
+                  )}{' '}
+                  dari {departments.length} jurusan
+                </p>
+
+                {jurusanTotalPages > 1 && (
+                  <nav
+                    aria-label="Navigasi halaman jurusan"
+                    className="flex flex-wrap items-center gap-1"
+                  >
+                    <button
+                      type="button"
+                      disabled={jurusanPage === 1}
+                      onClick={() =>
+                        setJurusanPage((page) => Math.max(1, page - 1))
+                      }
+                      className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Sebelumnya
+                    </button>
+
+                    {Array.from(
+                      { length: jurusanTotalPages },
+                      (_, index) => index + 1,
+                    ).map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        aria-current={
+                          jurusanPage === page ? 'page' : undefined
+                        }
+                        onClick={() => setJurusanPage(page)}
+                        className={`min-w-8 rounded-md border px-2.5 py-1.5 text-xs font-semibold ${
+                          jurusanPage === page
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      disabled={jurusanPage === jurusanTotalPages}
+                      onClick={() =>
+                        setJurusanPage((page) =>
+                          Math.min(jurusanTotalPages, page + 1),
+                        )
+                      }
+                      className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Berikutnya
+                    </button>
+                  </nav>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
