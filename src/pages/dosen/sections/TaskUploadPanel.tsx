@@ -3,12 +3,28 @@ import DosenSubmissionList from './DosenSubmissionList';
 
 interface Task {
   id: number;
+  kelas_id: number;
   judul: string;
   deskripsi: string;
   deadline: string;
   file_attachment_path?: string;
   created_at?: string;
   submissions_count?: number;
+  nama_kelas?: string;
+  nama_matkul?: string;
+}
+
+interface AcademicClass {
+  id: number;
+  nama_kelas: string;
+  nama_matkul?: string;
+  nama_dosen?: string;
+}
+
+interface Jurusan {
+  id: number;
+  kode_jurusan: string;
+  nama_jurusan: string;
 }
 
 interface TaskUploadPanelProps {
@@ -16,22 +32,24 @@ interface TaskUploadPanelProps {
 }
 
 export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelProps) {
-  // Form State
   const [title, setTitle] = useState('');
+  const [selectedJurusanId, setSelectedJurusanId] = useState('');
+  const [selectedKelasId, setSelectedKelasId] = useState('');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
   const [file, setFile] = useState<File | null>(null);
   
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [classList, setClassList] = useState<AcademicClass[]>([]);
+  const [jurusanList, setJurusanList] = useState<Jurusan[]>([]);
+  
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  // Pagination State untuk Riwayat Tugas
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // State Modal Hapus & Selected Task
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -56,6 +74,24 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://backend-student-academic.test/api';
 
+  const fetchJurusan = async () => {
+    try {
+      const token = getToken();
+      const response = await fetch(`${apiUrl}/dosen/departments`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setJurusanList(Array.isArray(data) ? data : data.data || []);
+      }
+    } catch (error) {
+      console.error('Gagal memuat daftar jurusan dosen', error);
+    }
+  };
+
   const fetchTasks = async () => {
     try {
       const token = getToken();
@@ -75,10 +111,42 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
   };
 
   useEffect(() => {
+    fetchJurusan();
     fetchTasks();
   }, []);
 
-  // Logika Pemotongan Data Pagination untuk Riwayat Tugas
+  useEffect(() => {
+    const fetchClassesByJurusan = async () => {
+      if (!selectedJurusanId) {
+        setClassList([]);
+        setSelectedKelasId('');
+        return;
+      }
+
+      try {
+        const token = getToken();
+        const response = await fetch(`${apiUrl}/dosen/classes-by-jurusan/${selectedJurusanId}`, {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setClassList(Array.isArray(data) ? data : data.data || []);
+        } else {
+          setClassList([]);
+        }
+      } catch (error) {
+        console.error('Gagal memuat daftar kelas dosen berdasarkan jurusan', error);
+        setClassList([]);
+      }
+    };
+
+    fetchClassesByJurusan();
+  }, [selectedJurusanId]);
+
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentTasks = tasks.slice(indexOfFirstItem, indexOfLastItem);
@@ -93,10 +161,21 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
       return;
     }
 
+    if (!selectedJurusanId) {
+      setMessage({ text: 'Silakan pilih jurusan terlebih dahulu!', type: 'error' });
+      return;
+    }
+
+    if (!selectedKelasId) {
+      setMessage({ text: 'Silakan pilih kelas terlebih dahulu!', type: 'error' });
+      return;
+    }
+
     setLoading(true);
     const token = getToken();
     const formData = new FormData();
     formData.append('judul', title);
+    formData.append('kelas_id', selectedKelasId);
     formData.append('deskripsi', description || '-');
     if (deadline) formData.append('deadline', deadline);
     if (file) formData.append('file', file);
@@ -118,11 +197,13 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
       if (!response.ok) throw new Error(data.message || 'Gagal menyimpan tugas.');
 
       setMessage({ 
-        text: editingId ? `Tugas berhasil diperbarui!` : `Tugas "${title}" berhasil dipublikasikan!`, 
+        text: editingId ? `Tugas berhasil diperbarui!` : `Tugas "${title}" berhasil dipublikasikan ke kelas!`, 
         type: 'success' 
       });
 
       setTitle('');
+      setSelectedJurusanId('');
+      setSelectedKelasId('');
       setDescription('');
       setDeadline('');
       setFile(null);
@@ -141,6 +222,7 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
   const handleEdit = (task: Task) => {
     setEditingId(task.id);
     setTitle(task.judul);
+    setSelectedKelasId(task.kelas_id ? task.kelas_id.toString() : '');
     setDescription(task.deskripsi || '');
     setDeadline(task.deadline ? task.deadline.slice(0, 16) : '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -179,7 +261,6 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
 
   return (
     <div className="space-y-6 relative">
-      {/* Form Section */}
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Materi Kelas</p>
         <h2 className="text-lg font-bold text-slate-800 mb-4">
@@ -195,9 +276,9 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
         )}
 
         <form onSubmit={handleSubmit} className="mt-4 grid gap-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Nama tugas</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Nama Tugas</label>
               <input
                 type="text"
                 value={title}
@@ -208,6 +289,46 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Pilih Jurusan</label>
+              <select
+                value={selectedJurusanId}
+                onChange={(e) => {
+                  setSelectedJurusanId(e.target.value);
+                  setSelectedKelasId('');
+                }}
+                required
+                className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-600 text-slate-700 cursor-pointer"
+              >
+                <option value="">-- Pilih Jurusan --</option>
+                {jurusanList.map((jur) => (
+                  <option key={jur.id} value={jur.id}>
+                    {jur.nama_jurusan} ({jur.kode_jurusan})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Pilih Kelas</label>
+              <select
+                value={selectedKelasId}
+                onChange={(e) => setSelectedKelasId(e.target.value)}
+                required
+                disabled={!selectedJurusanId}
+                className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-600 text-slate-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">-- Pilih Kelas Tujuan --</option>
+                {classList.map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.nama_kelas} {cls.nama_matkul ? `(${cls.nama_matkul})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Deadline / Tenggat Waktu</label>
               <input
@@ -244,7 +365,7 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
             {editingId && (
               <button
                 type="button"
-                onClick={() => { setEditingId(null); setTitle(''); setDescription(''); setDeadline(''); }}
+                onClick={() => { setEditingId(null); setTitle(''); setSelectedJurusanId(''); setSelectedKelasId(''); setDescription(''); setDeadline(''); }}
                 className="h-10 rounded-lg bg-slate-200 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-300 transition-colors"
               >
                 Batal
@@ -255,13 +376,12 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
               disabled={loading}
               className="h-10 rounded-lg bg-emerald-700 px-5 text-sm font-semibold text-white hover:bg-emerald-800 transition-colors disabled:opacity-50 cursor-pointer"
             >
-              {loading ? 'Menyimpan...' : editingId ? 'Perbarui Tugas' : 'Simpan tugas'}
+              {loading ? 'Menyimpan...' : editingId ? 'Perbarui Tugas' : 'Simpan Tugas'}
             </button>
           </div>
         </form>
       </section>
 
-      {/* Riwayat Tugas Section dengan Pagination */}
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
         <h3 className="text-md font-bold text-slate-800">Riwayat Tugas yang Diunggah</h3>
         
@@ -270,6 +390,7 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
             <thead>
               <tr className="border-b border-slate-200 text-xs text-slate-500 uppercase">
                 <th className="py-3 px-3">Judul Tugas</th>
+                <th className="py-3 px-3">Kelas</th>
                 <th className="py-3 px-3">Deskripsi</th>
                 <th className="py-3 px-3">Deadline</th>
                 <th className="py-3 px-3 text-center">Aksi</th>
@@ -280,6 +401,11 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
                 currentTasks.map((task) => (
                   <tr key={task.id} className="hover:bg-slate-50">
                     <td className="py-3 px-3 font-medium text-slate-900">{task.judul}</td>
+                    <td className="py-3 px-3">
+                      <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-xs font-semibold border border-emerald-200">
+                        {task.nama_kelas || `Kelas #${task.kelas_id}`}
+                      </span>
+                    </td>
                     <td className="py-3 px-3 truncate max-w-xs text-slate-600">{task.deskripsi || '-'}</td>
                     <td className="py-3 px-3 text-slate-600">{task.deadline ? new Date(task.deadline).toLocaleString('id-ID') : 'Tanpa Deadline'}</td>
                     <td className="py-3 px-3 text-center">
@@ -311,7 +437,7 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-slate-400 text-sm">
+                  <td colSpan={5} className="py-6 text-center text-slate-400 text-sm">
                     Belum ada riwayat tugas yang diunggah.
                   </td>
                 </tr>
@@ -320,7 +446,6 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
           </table>
         </div>
 
-        {/* Kontrol Navigasi Pagination Riwayat Tugas */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
             <span className="text-slate-500">
@@ -348,7 +473,6 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
         )}
       </section>
 
-      {/* Komponen Daftar Pengumpulan Tugas */}
       {selectedTask && (
         <DosenSubmissionList 
           token={getToken()} 
@@ -357,7 +481,6 @@ export default function TaskUploadPanel({ token: propToken }: TaskUploadPanelPro
         />
       )}
 
-      {/* Modal Hapus */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-100">
