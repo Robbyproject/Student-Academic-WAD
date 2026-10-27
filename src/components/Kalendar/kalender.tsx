@@ -61,35 +61,70 @@ function CalendarOffIcon({ className }: IconProps) {
     );
 }
 
+function normalizeDay(day: string | null | undefined): string {
+    return String(day ?? "")
+        .trim()
+        .toLocaleLowerCase("id-ID");
+}
+
+function formatTime(time: string | null | undefined): string {
+    if (!time) return "--:--";
+    return time.slice(0, 5);
+}
+
 function CalendarSchedule({ token }: { token: string | null }) {
     const [schedules, setSchedules] = useState<Schedule[]>([]);
     const [selectedDate, setSelectedDate] = useState<number>(
         new Date().getDate()
     );
-
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
     useEffect(() => {
-        const timeoutId = window.setTimeout(() => getSchedules(token)
-            .then((data) => {
-                setSchedules(data);
-            })
-            .catch((error) => {
-                console.error("Gagal mengambil jadwal:", error);
-            })
-            .finally(() => {
-                setLoading(false);
-            }), 0);
-        return () => window.clearTimeout(timeoutId);
+        let cancelled = false;
+
+        async function loadSchedules() {
+            setLoading(true);
+            setError("");
+
+            try {
+                // Token diteruskan agar API dapat menentukan
+                // jurusan mahasiswa yang sedang login.
+                const data = await getSchedules(token);
+
+                if (!cancelled) {
+                    setSchedules(data);
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    console.error("Gagal mengambil jadwal:", err);
+                    setSchedules([]);
+                    setError(
+                        err instanceof Error
+                            ? err.message
+                            : "Gagal mengambil jadwal kuliah."
+                    );
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        }
+
+        void loadSchedules();
+
+        return () => {
+            cancelled = true;
+        };
     }, [token]);
 
     /*
-     * Membuat data 7 hari berdasarkan minggu sekarang
+     * Membuat kalender Senin sampai Minggu berdasarkan
+     * minggu yang sedang berjalan.
      */
     const today = new Date();
-
     const currentDay = today.getDay();
-
     const monday = new Date(today);
 
     const diffToMonday =
@@ -99,7 +134,6 @@ function CalendarSchedule({ token }: { token: string | null }) {
 
     const weekDays = Array.from({ length: 7 }, (_, index) => {
         const date = new Date(monday);
-
         date.setDate(monday.getDate() + index);
 
         return {
@@ -110,35 +144,57 @@ function CalendarSchedule({ token }: { token: string | null }) {
                 weekday: "long",
             }),
             date: date.getDate(),
+            month: date.getMonth(),
+            year: date.getFullYear(),
         };
     });
 
     /*
-     * Jadwal berdasarkan tanggal yang dipilih
-     *
-     * Karena database tb_jadwal hanya menyimpan hari
-     * (Senin, Selasa, dst.), kita cocokkan berdasarkan
-     * nama hari.
+     * Menggunakan tanggal lengkap untuk menghindari
+     * tanggal yang sama pada bulan berbeda tertukar.
      */
-    const selectedDay = weekDays.find(
-        (item) => item.date === selectedDate
-    );
+    const selectedDay = weekDays.find((item) => {
+        const selected = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            selectedDate
+        );
 
-    const selectedSchedules = schedules.filter(
-        (schedule) =>
-            schedule.hari.toLowerCase() ===
-            selectedDay?.fullDay.toLowerCase()
-    );
+        return (
+            item.date === selectedDate &&
+            item.month === selected.getMonth() &&
+            item.year === selected.getFullYear()
+        );
+    });
 
-    const dividerLabel =
-        selectedDate === today.getDate()
-            ? "Today"
-            : `${selectedDay?.fullDay ?? ""}, ${selectedDate} ${today.toLocaleDateString(
-                  "id-ID",
-                  {
-                      month: "long",
-                  }
-              )}`;
+    const selectedSchedules = schedules
+        .filter(
+            (schedule) =>
+                normalizeDay(schedule.hari) ===
+                normalizeDay(selectedDay?.fullDay)
+        )
+        .sort((a, b) =>
+            formatTime(a.jam_mulai).localeCompare(
+                formatTime(b.jam_mulai)
+            )
+        );
+
+    const isToday =
+        selectedDay?.date === today.getDate() &&
+        selectedDay?.month === today.getMonth() &&
+        selectedDay?.year === today.getFullYear();
+
+    const dividerLabel = isToday
+        ? "Today"
+        : selectedDay
+          ? `${selectedDay.fullDay}, ${selectedDay.date} ${new Date(
+                selectedDay.year,
+                selectedDay.month,
+                selectedDay.date
+            ).toLocaleDateString("id-ID", {
+                month: "long",
+            })}`
+          : "";
 
     if (loading) {
         return (
@@ -147,7 +203,6 @@ function CalendarSchedule({ token }: { token: string | null }) {
                     <h2 className="text-base font-semibold text-slate-800">
                         Jadwal Minggu Ini
                     </h2>
-
                     <p className="mt-4 text-xs text-slate-400">
                         Memuat jadwal...
                     </p>
@@ -159,10 +214,35 @@ function CalendarSchedule({ token }: { token: string | null }) {
     return (
         <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             {/* Header */}
-            <div className="px-5 pt-5">
+            <div className="flex items-center justify-between px-5 pt-5">
                 <h2 className="text-base font-semibold text-slate-800">
                     Jadwal Minggu Ini
                 </h2>
+
+                <button
+                    type="button"
+                    onClick={async () => {
+                        setLoading(true);
+                        setError("");
+
+                        try {
+                            const data = await getSchedules(token);
+                            setSchedules(data);
+                        } catch (err) {
+                            setError(
+                                err instanceof Error
+                                    ? err.message
+                                    : "Gagal mengambil jadwal kuliah."
+                            );
+                            setSchedules([]);
+                        } finally {
+                            setLoading(false);
+                        }
+                    }}
+                    className="text-xs font-medium text-cyan-700 hover:underline"
+                >
+                    Muat ulang
+                </button>
             </div>
 
             {/* Kalender mingguan */}
@@ -170,17 +250,19 @@ function CalendarSchedule({ token }: { token: string | null }) {
                 <div className="grid grid-cols-7 gap-y-1">
                     {weekDays.map((item) => {
                         const isSelected =
-                            selectedDate === item.date;
+                            selectedDay?.date === item.date &&
+                            selectedDay?.month === item.month &&
+                            selectedDay?.year === item.year;
 
                         const hasSchedule = schedules.some(
                             (schedule) =>
-                                schedule.hari.toLowerCase() ===
-                                item.fullDay.toLowerCase()
+                                normalizeDay(schedule.hari) ===
+                                normalizeDay(item.fullDay)
                         );
 
                         return (
                             <button
-                                key={item.date}
+                                key={`${item.year}-${item.month}-${item.date}`}
                                 type="button"
                                 onClick={() =>
                                     setSelectedDate(item.date)
@@ -235,7 +317,14 @@ function CalendarSchedule({ token }: { token: string | null }) {
 
             {/* Daftar jadwal */}
             <div className="space-y-3 px-4 pb-4">
-                {selectedSchedules.length > 0 ? (
+                {error ? (
+                    <div
+                        role="alert"
+                        className="rounded-xl bg-red-50 px-4 py-5 text-center text-xs text-red-700"
+                    >
+                        {error}
+                    </div>
+                ) : selectedSchedules.length > 0 ? (
                     selectedSchedules.map((schedule, index) => (
                         <article
                             key={schedule.id}
@@ -253,7 +342,6 @@ function CalendarSchedule({ token }: { token: string | null }) {
                             <ul className="mt-3 space-y-2 text-xs text-slate-500">
                                 <li className="flex items-center gap-2">
                                     <BookIcon className="shrink-0" />
-
                                     <span className="min-w-0 break-words">
                                         {schedule.nama_kelas}
                                     </span>
@@ -261,18 +349,16 @@ function CalendarSchedule({ token }: { token: string | null }) {
 
                                 <li className="flex items-center gap-2">
                                     <ClockIcon className="shrink-0" />
-
                                     <span className="min-w-0 break-words">
-                                        {schedule.jam_mulai} -{" "}
-                                        {schedule.jam_selesai}
+                                        {formatTime(schedule.jam_mulai)} -{" "}
+                                        {formatTime(schedule.jam_selesai)}
                                     </span>
                                 </li>
 
                                 <li className="flex items-center gap-2">
                                     <PinIcon className="shrink-0" />
-
                                     <span className="min-w-0 break-words">
-                                        {schedule.ruangan}
+                                        {schedule.ruangan || "-"}
                                     </span>
                                 </li>
                             </ul>
@@ -281,7 +367,6 @@ function CalendarSchedule({ token }: { token: string | null }) {
                 ) : (
                     <div className="flex flex-col items-center rounded-xl bg-slate-50 py-8 text-slate-400">
                         <CalendarOffIcon />
-
                         <p className="mt-2 text-xs text-slate-500">
                             Tidak ada jadwal kuliah
                         </p>

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from 'react';
+
 import {
   getSchedules,
   createSchedule,
@@ -7,14 +15,13 @@ import {
   type Schedule,
   type SchedulePayload,
 } from '../../../api/getSchedules';
-import { unwrapList } from '../../../api/student';
 
 type Props = {
   token: string | null;
 };
 
 type AcademicClass = {
-  id: number;
+  id: number | string;
   nama_kelas: string;
   kode_matkul: string;
   nama_matkul: string;
@@ -31,8 +38,21 @@ type ScheduleForm = {
   ruangan: string;
 };
 
-const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
-const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  'http://backend-student-academic.test/api'
+).replace(/\/$/, '');
+
+const DAYS = [
+  'Senin',
+  'Selasa',
+  'Rabu',
+  'Kamis',
+  'Jumat',
+  'Sabtu',
+  'Minggu',
+];
+
 const ITEMS_PER_PAGE = 5;
 
 const inputClass =
@@ -69,6 +89,42 @@ function timeRangesOverlap(
   return start < otherEnd && end > otherStart;
 }
 
+/**
+ * Mendukung respons array biasa dan pagination Laravel.
+ */
+function parseAcademicClasses(payload: unknown): AcademicClass[] {
+  if (Array.isArray(payload)) {
+    return payload as AcademicClass[];
+  }
+
+  if (payload === null || typeof payload !== 'object') {
+    throw new Error('Respons daftar kelas tidak valid.');
+  }
+
+  if ('data' in payload && Array.isArray(payload.data)) {
+    return payload.data as AcademicClass[];
+  }
+
+  if ('classes' in payload && Array.isArray(payload.classes)) {
+    return payload.classes as AcademicClass[];
+  }
+
+  if (
+    'academic_classes' in payload &&
+    Array.isArray(payload.academic_classes)
+  ) {
+    return payload.academic_classes as AcademicClass[];
+  }
+
+  if ('kelas' in payload && Array.isArray(payload.kelas)) {
+    return payload.kelas as AcademicClass[];
+  }
+
+  throw new Error(
+    'Format respons kelas tidak sesuai. Periksa endpoint /academic-classes.',
+  );
+}
+
 export default function ScheduleManagement({ token }: Props) {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [classes, setClasses] = useState<AcademicClass[]>([]);
@@ -85,78 +141,60 @@ export default function ScheduleManagement({ token }: Props) {
     setError('');
 
     try {
-      // Kelas di backend di-paginate, jadi muat semua halamannya.
-      const [scheduleData, allClasses] = await Promise.all([
+      if (!token) {
+        throw new Error(
+          'Token login tidak ditemukan. Silakan login ulang.',
+        );
+      }
+
+      const [scheduleData, classResponse] = await Promise.all([
         getSchedules(token),
-        fetchAllClasses(),
+
+        fetch(
+          `${API_URL}/academic-classes?per_page=100&page=1`,
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        ),
       ]);
 
+      const payload: unknown = await classResponse
+        .json()
+        .catch(() => null);
+
+      if (!classResponse.ok) {
+        const body =
+          payload !== null && typeof payload === 'object'
+            ? (payload as { message?: string })
+            : null;
+
+        throw new Error(
+          body?.message ??
+            `Gagal mengambil daftar kelas (HTTP ${classResponse.status}).`,
+        );
+      }
+
+      const classData = parseAcademicClasses(payload);
+
       setSchedules(scheduleData);
-      setClasses(allClasses);
+      setClasses(classData);
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : 'Gagal mengambil data jadwal.',
+          : 'Gagal mengambil data jadwal dan kelas.',
       );
     } finally {
       setLoading(false);
     }
   }, [token]);
 
-  const fetchAllClasses = useCallback(async (): Promise<AcademicClass[]> => {
-    if (!API_URL) {
-      throw new Error('VITE_API_URL belum dikonfigurasi.');
-    }
-
-    const allClasses: AcademicClass[] = [];
-    let page = 1;
-    let lastPage = 1;
-
-    do {
-      const response = await fetch(
-        `${API_URL}/academic-classes?per_page=100&page=${page}`,
-        {
-          headers: {
-            Accept: 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        },
-      );
-
-      const payload: unknown = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        const body = payload as { message?: string } | null;
-        throw new Error(body?.message ?? 'Gagal mengambil daftar kelas.');
-      }
-
-      const items = unwrapList<AcademicClass>(
-        payload,
-        'classes',
-        'academic_classes',
-        'kelas',
-      );
-
-      // Berhenti kalau halaman berikutnya ternyata tidak berisi apa-apa.
-      if (items.length === 0) break;
-
-      allClasses.push(...items);
-
-      const meta = payload as { last_page?: number } | null;
-      lastPage = Number(meta?.last_page ?? page);
-      page += 1;
-    } while (page <= lastPage);
-
-    return allClasses;
-  }, [token]);
-
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void loadData();
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
+    void loadData();
   }, [loadData]);
 
   const totalPages = Math.max(
@@ -167,7 +205,10 @@ export default function ScheduleManagement({ token }: Props) {
   const paginatedSchedules = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
 
-    return schedules.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    return schedules.slice(
+      startIndex,
+      startIndex + ITEMS_PER_PAGE,
+    );
   }, [schedules, currentPage]);
 
   useEffect(() => {
@@ -177,7 +218,10 @@ export default function ScheduleManagement({ token }: Props) {
   }, [currentPage, totalPages]);
 
   function changeField(field: keyof ScheduleForm, value: string) {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
   }
 
   function resetForm() {
@@ -185,38 +229,9 @@ export default function ScheduleManagement({ token }: Props) {
     setEditingId(null);
   }
 
-  function resolveKelasId(schedule: Schedule): string {
-    const rawKelasId = String(schedule.kelas_id ?? '').trim();
-
-    if (
-      rawKelasId &&
-      rawKelasId.toLowerCase() !== 'undefined' &&
-      rawKelasId.toLowerCase() !== 'null' &&
-      classes.some((item) => sameId(item.id, rawKelasId))
-    ) {
-      return rawKelasId;
-    }
-
-    const candidates = classes.filter(
-      (item) =>
-        normalized(item.nama_kelas) === normalized(schedule.nama_kelas) &&
-        normalized(item.kode_matkul) === normalized(schedule.kode_matkul) &&
-        normalized(item.nama_matkul) === normalized(schedule.nama_matkul),
-    );
-
-    const byDosen = candidates.find(
-      (item) =>
-        normalized(item.nama_dosen) === normalized(schedule.nama_dosen),
-    );
-
-    const matched = byDosen ?? candidates[0];
-
-    return matched ? String(matched.id) : '';
-  }
-
   function startEdit(schedule: Schedule) {
     setForm({
-      kelas_id: resolveKelasId(schedule),
+      kelas_id: String(schedule.kelas_id),
       hari: schedule.hari,
       jam_mulai: schedule.jam_mulai.slice(0, 5),
       jam_selesai: schedule.jam_selesai.slice(0, 5),
@@ -226,9 +241,16 @@ export default function ScheduleManagement({ token }: Props) {
     setEditingId(Number(schedule.id));
     setError('');
     setNotice('');
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
   }
 
-  function findScheduleConflict(payload: SchedulePayload): string | null {
+  function findScheduleConflict(
+    payload: SchedulePayload,
+  ): string | null {
     const selectedClass = classes.find((item) =>
       sameId(item.id, payload.kelas_id),
     );
@@ -258,36 +280,51 @@ export default function ScheduleManagement({ token }: Props) {
       }
 
       if (
-        (selectedClass?.matkul_id !== undefined &&
+        (
+          selectedClass?.matkul_id !== undefined &&
           scheduledClass?.matkul_id !== undefined &&
-          sameId(selectedClass.matkul_id, scheduledClass.matkul_id)) ||
-        (selectedClass?.kode_matkul &&
+          sameId(
+            selectedClass.matkul_id,
+            scheduledClass.matkul_id,
+          )
+        ) ||
+        (
+          selectedClass?.kode_matkul &&
           normalized(selectedClass.kode_matkul) ===
-            normalized(schedule.kode_matkul))
+            normalized(schedule.kode_matkul)
+        )
       ) {
         reasons.push('mata kuliah yang sama');
       }
 
       if (
-        (selectedClass?.dosen_id !== undefined &&
+        (
+          selectedClass?.dosen_id !== undefined &&
           scheduledClass?.dosen_id !== undefined &&
-          sameId(selectedClass.dosen_id, scheduledClass.dosen_id)) ||
-        (selectedClass?.nama_dosen &&
+          sameId(
+            selectedClass.dosen_id,
+            scheduledClass.dosen_id,
+          )
+        ) ||
+        (
+          selectedClass?.nama_dosen &&
           normalized(selectedClass.nama_dosen) ===
-            normalized(schedule.nama_dosen))
+            normalized(schedule.nama_dosen)
+        )
       ) {
         reasons.push('dosen yang sama');
       }
 
-      if (!reasons.length) return [];
+      if (reasons.length === 0) {
+        return [];
+      }
 
       return [
         `${reasons.join(', ')} (${schedule.nama_matkul}, kelas ${
           schedule.nama_kelas
-        }, dosen ${schedule.nama_dosen}) pukul ${schedule.jam_mulai.slice(
-          0,
-          5,
-        )}–${schedule.jam_selesai.slice(0, 5)}.`,
+        }, dosen ${schedule.nama_dosen}) pukul ${
+          schedule.jam_mulai.slice(0, 5)
+        }–${schedule.jam_selesai.slice(0, 5)}.`,
       ];
     });
 
@@ -296,7 +333,9 @@ export default function ScheduleManagement({ token }: Props) {
       : null;
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
     setError('');
     setNotice('');
@@ -307,7 +346,9 @@ export default function ScheduleManagement({ token }: Props) {
     }
 
     if (form.jam_mulai >= form.jam_selesai) {
-      setError('Jam selesai harus lebih besar daripada jam mulai.');
+      setError(
+        'Jam selesai harus lebih besar daripada jam mulai.',
+      );
       return;
     }
 
@@ -342,11 +383,14 @@ export default function ScheduleManagement({ token }: Props) {
 
       resetForm();
       setCurrentPage(1);
+
       await loadData();
       setNotice(message);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Gagal menyimpan jadwal.',
+        err instanceof Error
+          ? err.message
+          : 'Gagal menyimpan jadwal.',
       );
     } finally {
       setSaving(false);
@@ -354,7 +398,9 @@ export default function ScheduleManagement({ token }: Props) {
   }
 
   async function handleDelete(id: number) {
-    if (!window.confirm('Yakin ingin menghapus jadwal ini?')) return;
+    if (!window.confirm('Yakin ingin menghapus jadwal ini?')) {
+      return;
+    }
 
     setError('');
     setNotice('');
@@ -370,30 +416,34 @@ export default function ScheduleManagement({ token }: Props) {
       setNotice('Jadwal berhasil dihapus.');
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Gagal menghapus jadwal.',
+        err instanceof Error
+          ? err.message
+          : 'Gagal menghapus jadwal.',
       );
     }
   }
 
   function renderPagination() {
-    if (totalPages <= 1) return null;
-
-    const pages: number[] = [];
-
-    for (let page = 1; page <= totalPages; page += 1) {
-      pages.push(page);
+    if (totalPages <= 1) {
+      return null;
     }
+
+    const pages = Array.from(
+      { length: totalPages },
+      (_, index) => index + 1,
+    );
 
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-3 py-4">
         <p className="text-xs text-slate-500">
           Menampilkan{' '}
-          {schedules.length === 0
-            ? 0
-            : (currentPage - 1) * ITEMS_PER_PAGE + 1}
+          {(currentPage - 1) * ITEMS_PER_PAGE + 1}
           {'–'}
-          {Math.min(currentPage * ITEMS_PER_PAGE, schedules.length)} dari{' '}
-          {schedules.length} jadwal
+          {Math.min(
+            currentPage * ITEMS_PER_PAGE,
+            schedules.length,
+          )}{' '}
+          dari {schedules.length} jadwal
         </p>
 
         <nav
@@ -415,7 +465,9 @@ export default function ScheduleManagement({ token }: Props) {
             <button
               key={page}
               type="button"
-              aria-current={currentPage === page ? 'page' : undefined}
+              aria-current={
+                currentPage === page ? 'page' : undefined
+              }
               onClick={() => setCurrentPage(page)}
               className={`min-w-8 rounded-md border px-2.5 py-1.5 text-xs font-semibold ${
                 currentPage === page
@@ -431,7 +483,9 @@ export default function ScheduleManagement({ token }: Props) {
             type="button"
             disabled={currentPage === totalPages}
             onClick={() =>
-              setCurrentPage((page) => Math.min(totalPages, page + 1))
+              setCurrentPage((page) =>
+                Math.min(totalPages, page + 1),
+              )
             }
             className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -494,16 +548,16 @@ export default function ScheduleManagement({ token }: Props) {
 
             {classes.map((item) => (
               <option key={item.id} value={item.id}>
-                {item.kode_matkul} - {item.nama_matkul} ({item.nama_kelas}) -{' '}
-                {item.nama_dosen}
+                {item.kode_matkul} - {item.nama_matkul} (
+                {item.nama_kelas}) - {item.nama_dosen}
               </option>
             ))}
           </select>
 
-          {classes.length === 0 && (
+          {classes.length === 0 && !loading && (
             <span className="mt-1 block text-xs text-amber-700">
-              Belum ada kelas. Buat kelas terlebih dahulu di bagian Kelas &
-              Jadwal.
+              Belum ada kelas yang tersedia. Pastikan mata kuliah sudah
+              dibuat dan kelasnya sudah ditambahkan di administrasi.
             </span>
           )}
         </label>
@@ -513,7 +567,9 @@ export default function ScheduleManagement({ token }: Props) {
           <select
             className={inputClass}
             value={form.hari}
-            onChange={(event) => changeField('hari', event.target.value)}
+            onChange={(event) =>
+              changeField('hari', event.target.value)
+            }
           >
             {DAYS.map((day) => (
               <option key={day} value={day}>
@@ -554,7 +610,9 @@ export default function ScheduleManagement({ token }: Props) {
           <input
             className={inputClass}
             value={form.ruangan}
-            onChange={(event) => changeField('ruangan', event.target.value)}
+            onChange={(event) =>
+              changeField('ruangan', event.target.value)
+            }
             placeholder="Contoh: Lab Komputer"
             maxLength={100}
           />
@@ -577,7 +635,7 @@ export default function ScheduleManagement({ token }: Props) {
             <button
               type="button"
               onClick={resetForm}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold"
+              className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold"
             >
               Batal Edit
             </button>
@@ -586,14 +644,17 @@ export default function ScheduleManagement({ token }: Props) {
       </form>
 
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-semibold text-slate-900">Daftar Jadwal</h3>
+        <h3 className="font-semibold text-slate-900">
+          Daftar Jadwal
+        </h3>
 
         <button
           type="button"
+          disabled={loading}
           onClick={() => void loadData()}
-          className="text-sm font-semibold text-cyan-800 hover:underline"
+          className="text-sm font-semibold text-cyan-800 hover:underline disabled:opacity-50"
         >
-          Muat ulang
+          {loading ? 'Memuat...' : 'Muat ulang'}
         </button>
       </div>
 
@@ -635,9 +696,13 @@ export default function ScheduleManagement({ token }: Props) {
                       </p>
                     </td>
 
-                    <td className="p-3">{schedule.nama_kelas}</td>
+                    <td className="p-3">
+                      {schedule.nama_kelas}
+                    </td>
 
-                    <td className="p-3">{schedule.nama_dosen}</td>
+                    <td className="p-3">
+                      {schedule.nama_dosen}
+                    </td>
 
                     <td className="p-3">
                       <p>{schedule.hari}</p>
@@ -647,7 +712,9 @@ export default function ScheduleManagement({ token }: Props) {
                       </p>
                     </td>
 
-                    <td className="p-3">{schedule.ruangan || '-'}</td>
+                    <td className="p-3">
+                      {schedule.ruangan || '-'}
+                    </td>
 
                     <td className="p-3">
                       <div className="flex gap-2">

@@ -243,6 +243,7 @@ function StudentPortal({
                   <Dashboard user={user} token={token} />
 
                   <Kelas
+                    token={token}
                     onCourseSelect={setSelectedCourse}
                   />
                 </div>

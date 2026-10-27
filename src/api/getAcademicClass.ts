@@ -1,3 +1,9 @@
+
+const API_URL = (
+    import.meta.env.VITE_API_URL ||
+    'http://backend-student-academic.test/api'
+).replace(/\/+$/, '');
+
 export interface AcademicClass {
     id: string | number;
     nama_kelas: string;
@@ -11,7 +17,7 @@ export interface AcademicClass {
 }
 
 export interface Jurusan {
-    id: string;
+    id: string | number;
     nama_jurusan: string;
     kode_jurusan: string;
 }
@@ -31,34 +37,121 @@ export interface AcademicClassPagination {
     total: number;
 }
 
-export async function getJurusan(): Promise<Jurusan[]> {
-    const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/departments`
-    );
+async function getErrorMessage(
+    response: Response,
+    fallback: string,
+): Promise<string> {
+    const result: unknown = await response.json().catch(() => null);
 
-    if (!response.ok) {
-        throw new Error('Gagal mengambil data jurusan');
+    if (
+        result !== null &&
+        typeof result === 'object' &&
+        'message' in result &&
+        typeof result.message === 'string'
+    ) {
+        return result.message;
     }
 
-    return response.json();
+    return fallback;
+}
+
+export async function getJurusan(): Promise<Jurusan[]> {
+    const response = await fetch(`${API_URL}/departments`, {
+        method: 'GET',
+        headers: {
+            Accept: 'application/json',
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(
+            await getErrorMessage(
+                response,
+                `Gagal mengambil data jurusan (HTTP ${response.status}).`,
+            ),
+        );
+    }
+
+    const result: unknown = await response.json();
+
+    if (Array.isArray(result)) {
+        return result as Jurusan[];
+    }
+
+    if (
+        result !== null &&
+        typeof result === 'object' &&
+        'data' in result &&
+        Array.isArray(result.data)
+    ) {
+        return result.data as Jurusan[];
+    }
+
+    return [];
 }
 
 export async function getAcademicClasses(
     page: number = 1,
     perPage: number = 10,
+    token?: string | null,
 ): Promise<AcademicClassPagination> {
+    const authToken = token?.trim();
+
+    if (!authToken) {
+        throw new Error(
+            'Token login tidak tersedia. Silakan login ulang.',
+        );
+    }
+
     const params = new URLSearchParams({
-        page: String(page),
-        per_page: String(perPage),
+        page: String(Math.max(1, Math.floor(page))),
+        per_page: String(
+            Math.min(100, Math.max(1, Math.floor(perPage))),
+        ),
     });
 
     const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/academic-classes?${params.toString()}`
+        `${API_URL}/academic-classes?${params.toString()}`,
+        {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${authToken}`,
+            },
+        },
     );
 
     if (!response.ok) {
-        throw new Error('Gagal mengambil data kelas akademik');
+        let message = await getErrorMessage(
+            response,
+            `Gagal mengambil data kelas akademik (HTTP ${response.status}).`,
+        );
+
+        if (response.status === 401) {
+            message =
+                'Autentikasi gagal (401). Token tidak valid atau kedaluwarsa. Silakan login ulang.';
+        } else if (response.status === 403) {
+            message =
+                'Akses ditolak (403). Periksa izin akses pengguna di backend.';
+        }
+
+        throw new Error(message);
     }
 
-    return response.json();
+    const result: unknown = await response.json();
+
+    if (
+        result === null ||
+        typeof result !== 'object' ||
+        !('data' in result) ||
+        !Array.isArray(result.data) ||
+        !('current_page' in result) ||
+        !('last_page' in result)
+    ) {
+        throw new Error(
+            'Format respons pagination tidak valid. Periksa respons API Laravel.',
+        );
+    }
+
+    return result as AcademicClassPagination;
 }
