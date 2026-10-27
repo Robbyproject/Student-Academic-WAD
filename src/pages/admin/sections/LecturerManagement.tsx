@@ -35,12 +35,43 @@ async function getDepartments(token: string | null) {
   return unwrapList<Department>(payload, 'jurusan', 'departments');
 }
 
-async function getLecturers(token: string | null, departmentId = '') {
-  const query = departmentId
-    ? `?jurusan_id=${encodeURIComponent(departmentId)}`
-    : '';
-  const payload = await studentRequest<unknown>(`/admin/dosen${query}`, token);
-  return unwrapList<Lecturer>(payload, 'dosen', 'lecturers');
+const LECTURERS_PER_PAGE = 10;
+
+type LecturerPage = {
+  items: Lecturer[];
+  currentPage: number;
+  totalPages: number;
+  total: number;
+};
+
+async function getLecturers(
+  token: string | null,
+  departmentId = '',
+  page = 1,
+  perPage = LECTURERS_PER_PAGE
+): Promise<LecturerPage> {
+  const query = new URLSearchParams({
+    page: String(page),
+    per_page: String(perPage),
+  });
+  if (departmentId) {
+    query.set('jurusan_id', departmentId);
+  }
+  const payload = await studentRequest<unknown>(
+    `/admin/dosen?${query.toString()}`,
+    token
+  );
+  const items = unwrapList<Lecturer>(payload, 'dosen', 'lecturers');
+  const meta =
+    payload && typeof payload === 'object'
+      ? (payload as Record<string, unknown>)
+      : {};
+  return {
+    items,
+    currentPage: Math.max(1, Number(meta.current_page ?? page)),
+    totalPages: Math.max(1, Number(meta.last_page ?? 1)),
+    total: Number(meta.total ?? items.length),
+  };
 }
 
 export default function LecturerManagement({ token }: Props) {
@@ -54,27 +85,51 @@ export default function LecturerManagement({ token }: Props) {
   const [lecturerPassword, setLecturerPassword] = useState('');
   const [lecturerDepartmentId, setLecturerDepartmentId] = useState('');
   const [lecturerFilter, setLecturerFilter] = useState('');
+  const [lecturerPage, setLecturerPage] = useState(1);
+  const [lecturerTotalPages, setLecturerTotalPages] = useState(1);
+  const [lecturerTotal, setLecturerTotal] = useState(0);
+  const [refreshingLecturers, setRefreshingLecturers] = useState(false);
   const [editingLecturerId, setEditingLecturerId] = useState<number | null>(null);
   const [savingLecturer, setSavingLecturer] = useState(false);
   const [deletingLecturerId, setDeletingLecturerId] = useState<number | null>(null);
   const [lecturerMessage, setLecturerMessage] = useState('');
   const [lecturerError, setLecturerError] = useState('');
 
-  const refreshData = useCallback(async (departmentId = lecturerFilter) => {
-    const [nextDepartments, nextLecturers] = await Promise.all([
-      getDepartments(token),
-      getLecturers(token, departmentId),
-    ]);
-    setDepartments(nextDepartments);
-    setLecturers(nextLecturers);
-    setLecturerDepartmentId((current) =>
-      nextDepartments.some((department) => String(department.id) === current)
-        ? current
-        : nextDepartments.length
-          ? String(nextDepartments[0].id)
-          : ''
-    );
-  }, [lecturerFilter, token]);
+  const refreshData = useCallback(
+    async (departmentId = lecturerFilter, page = lecturerPage) => {
+      setRefreshingLecturers(true);
+      try {
+        const [nextDepartments, lecturerResult] = await Promise.all([
+          getDepartments(token),
+          getLecturers(token, departmentId, page),
+        ]);
+
+        let result = lecturerResult;
+
+        // Halaman yang diminta bisa hilang setelah menghapus data terakhir
+        // di halaman itu; kembali ke halaman terakhir yang tersedia.
+        if (page > result.totalPages) {
+          result = await getLecturers(token, departmentId, result.totalPages);
+        }
+
+        setDepartments(nextDepartments);
+        setLecturers(result.items);
+        setLecturerPage(result.currentPage);
+        setLecturerTotalPages(result.totalPages);
+        setLecturerTotal(result.total);
+        setLecturerDepartmentId((current) =>
+          nextDepartments.some((department) => String(department.id) === current)
+            ? current
+            : nextDepartments.length
+              ? String(nextDepartments[0].id)
+              : ''
+        );
+      } finally {
+        setRefreshingLecturers(false);
+      }
+    },
+    [lecturerFilter, lecturerPage, token]
+  );
 
   useEffect(() => {
     let active = true;
@@ -82,13 +137,16 @@ export default function LecturerManagement({ token }: Props) {
       setLoading(true);
       setDataError('');
       try {
-        const [nextDepartments, nextLecturers] = await Promise.all([
+        const [nextDepartments, lecturerResult] = await Promise.all([
           getDepartments(token),
-          getLecturers(token),
+          getLecturers(token, '', 1),
         ]);
         if (active) {
           setDepartments(nextDepartments);
-          setLecturers(nextLecturers);
+          setLecturers(lecturerResult.items);
+          setLecturerPage(lecturerResult.currentPage);
+          setLecturerTotalPages(lecturerResult.totalPages);
+          setLecturerTotal(lecturerResult.total);
           setLecturerDepartmentId((current) =>
             nextDepartments.some((department) => String(department.id) === current)
               ? current
@@ -148,7 +206,10 @@ export default function LecturerManagement({ token }: Props) {
         isEditing ? 'Data dosen berhasil diperbarui.' : 'Dosen berhasil ditambahkan.'
       );
       try {
-        await refreshData(lecturerDepartmentId);
+        await refreshData(
+          lecturerDepartmentId,
+          isEditing ? lecturerPage : 1
+        );
       } catch (error) {
         console.error('Dosen tersimpan, tetapi daftar gagal diperbarui:', error);
         setLecturerError(
@@ -228,13 +289,60 @@ export default function LecturerManagement({ token }: Props) {
     setLecturerFilter(departmentId);
     setLecturerError('');
     try {
-      setLecturers(await getLecturers(token, departmentId));
+      await refreshData(departmentId, 1);
     } catch (error) {
       console.error('Gagal memfilter daftar dosen:', error);
       setLecturerError(
         error instanceof Error ? error.message : 'Gagal memuat daftar dosen.'
       );
     }
+  }
+
+  function goToLecturerPage(page: number) {
+    void refreshData(lecturerFilter, page);
+  }
+
+  function renderLecturerPagination() {
+    if (lecturerTotal === 0) return null;
+
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-1 py-3">
+        <p className="text-xs text-slate-500">
+          Menampilkan {(lecturerPage - 1) * LECTURERS_PER_PAGE + 1}–
+          {Math.min(lecturerPage * LECTURERS_PER_PAGE, lecturerTotal)} dari{' '}
+          {lecturerTotal} dosen
+        </p>
+
+        <nav
+          aria-label="Navigasi halaman dosen"
+          className="flex flex-wrap items-center gap-2"
+        >
+          <button
+            type="button"
+            disabled={lecturerPage <= 1 || refreshingLecturers}
+            onClick={() => goToLecturerPage(lecturerPage - 1)}
+            className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Sebelumnya
+          </button>
+
+          <span className="text-xs font-medium text-slate-600">
+            Halaman {lecturerPage} dari {lecturerTotalPages}
+          </span>
+
+          <button
+            type="button"
+            disabled={
+              lecturerPage >= lecturerTotalPages || refreshingLecturers
+            }
+            onClick={() => goToLecturerPage(lecturerPage + 1)}
+            className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Berikutnya
+          </button>
+        </nav>
+      </div>
+    );
   }
 
   const departmentsById = new Map(
@@ -445,6 +553,7 @@ export default function LecturerManagement({ token }: Props) {
             )}
           </tbody>
         </table>
+        {renderLecturerPagination()}
       </div>
     </section>
   );

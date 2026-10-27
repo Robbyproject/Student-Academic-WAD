@@ -297,7 +297,11 @@ export function App() {
           onLogout={handleLogout}
         />
       ) : session.role === 'dosen' ? (
-        <LecturerDashboard user={session.user} onLogout={handleLogout} />
+        <LecturerDashboard
+          user={session.user}
+          token={session.token}
+          onLogout={handleLogout}
+        />
       ) : (
         <AdminDashboard
           user={session.user}

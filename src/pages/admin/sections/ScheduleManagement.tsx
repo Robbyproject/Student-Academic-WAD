@@ -85,43 +85,14 @@ export default function ScheduleManagement({ token }: Props) {
     setError('');
 
     try {
-      const [scheduleData, classResponse] = await Promise.all([
+      // Kelas di backend di-paginate, jadi muat semua halamannya.
+      const [scheduleData, allClasses] = await Promise.all([
         getSchedules(token),
-        (async () => {
-          if (!API_URL) {
-            throw new Error('VITE_API_URL belum dikonfigurasi.');
-          }
-
-          const response = await fetch(`${API_URL}/academic-classes`, {
-            headers: {
-              Accept: 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-          });
-
-          const payload: unknown = await response.json().catch(() => null);
-
-          if (!response.ok) {
-            const body = payload as { message?: string } | null;
-            throw new Error(
-              body?.message ?? 'Gagal mengambil daftar kelas.',
-            );
-          }
-
-          return payload;
-        })(),
+        fetchAllClasses(),
       ]);
 
       setSchedules(scheduleData);
-
-      setClasses(
-        unwrapList<AcademicClass>(
-          classResponse,
-          'classes',
-          'academic_classes',
-          'kelas',
-        ),
-      );
+      setClasses(allClasses);
     } catch (err) {
       setError(
         err instanceof Error
@@ -131,6 +102,53 @@ export default function ScheduleManagement({ token }: Props) {
     } finally {
       setLoading(false);
     }
+  }, [token]);
+
+  const fetchAllClasses = useCallback(async (): Promise<AcademicClass[]> => {
+    if (!API_URL) {
+      throw new Error('VITE_API_URL belum dikonfigurasi.');
+    }
+
+    const allClasses: AcademicClass[] = [];
+    let page = 1;
+    let lastPage = 1;
+
+    do {
+      const response = await fetch(
+        `${API_URL}/academic-classes?per_page=100&page=${page}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        },
+      );
+
+      const payload: unknown = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const body = payload as { message?: string } | null;
+        throw new Error(body?.message ?? 'Gagal mengambil daftar kelas.');
+      }
+
+      const items = unwrapList<AcademicClass>(
+        payload,
+        'classes',
+        'academic_classes',
+        'kelas',
+      );
+
+      // Berhenti kalau halaman berikutnya ternyata tidak berisi apa-apa.
+      if (items.length === 0) break;
+
+      allClasses.push(...items);
+
+      const meta = payload as { last_page?: number } | null;
+      lastPage = Number(meta?.last_page ?? page);
+      page += 1;
+    } while (page <= lastPage);
+
+    return allClasses;
   }, [token]);
 
   useEffect(() => {
@@ -167,9 +185,38 @@ export default function ScheduleManagement({ token }: Props) {
     setEditingId(null);
   }
 
+  function resolveKelasId(schedule: Schedule): string {
+    const rawKelasId = String(schedule.kelas_id ?? '').trim();
+
+    if (
+      rawKelasId &&
+      rawKelasId.toLowerCase() !== 'undefined' &&
+      rawKelasId.toLowerCase() !== 'null' &&
+      classes.some((item) => sameId(item.id, rawKelasId))
+    ) {
+      return rawKelasId;
+    }
+
+    const candidates = classes.filter(
+      (item) =>
+        normalized(item.nama_kelas) === normalized(schedule.nama_kelas) &&
+        normalized(item.kode_matkul) === normalized(schedule.kode_matkul) &&
+        normalized(item.nama_matkul) === normalized(schedule.nama_matkul),
+    );
+
+    const byDosen = candidates.find(
+      (item) =>
+        normalized(item.nama_dosen) === normalized(schedule.nama_dosen),
+    );
+
+    const matched = byDosen ?? candidates[0];
+
+    return matched ? String(matched.id) : '';
+  }
+
   function startEdit(schedule: Schedule) {
     setForm({
-      kelas_id: String(schedule.kelas_id),
+      kelas_id: resolveKelasId(schedule),
       hari: schedule.hari,
       jam_mulai: schedule.jam_mulai.slice(0, 5),
       jam_selesai: schedule.jam_selesai.slice(0, 5),
@@ -179,8 +226,6 @@ export default function ScheduleManagement({ token }: Props) {
     setEditingId(Number(schedule.id));
     setError('');
     setNotice('');
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function findScheduleConflict(payload: SchedulePayload): string | null {
